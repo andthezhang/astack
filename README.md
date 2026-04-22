@@ -16,7 +16,7 @@ astack is a small, opinionated set of routing skills that give AI coding agents 
 | `astack-qa` | Test flows, repro bugs, grade with a rubric |
 | `astack-ship` | Commit, push, PR, deploy |
 | `astack-cleanup` | Non-doc structure fixes (skills, runtime config, entrypoints) |
-| `astack-compound` | Run the durable look-back: read new commits, sync docs, flag suspicious removals, write lessons/rules |
+| `astack-compound` | Run the durable look-back: read new commits, review for suspicious removals, sync docs, write lessons/rules |
 | `astack-skills` | Maintain the skill layer itself — graduate recurring lessons, prune stale ones, fix trigger text |
 | `astack-docs` | Init / migrate / lint the docs tree — [OpenAI-style](https://agents.md/) layout, per-scope |
 
@@ -29,8 +29,8 @@ astack treats skills as **materialized views on top of docs**. Docs are the sour
 That framing gives astack a natural maintenance loop:
 
 - **Write**: docs capture principles. A skill materializes the view of a doc that routes agents correctly.
-- **Cite**: every skill declares `source_docs:` in its frontmatter — the docs it projects. That citation makes refresh and drift detection possible.
-- **Compound (default look-back)**: after meaningful work, `astack-compound` reads commits since `.astack/last-sync`, syncs docs when needed, runs a suspicious-commit check, and writes the smallest durable follow-up — a doc change, `AGENTS.md` rule, skill update, or `<skill>/lessons.md` entry.
+- **Cite**: every skill declares `source_docs:` in its frontmatter — the docs it projects. That citation makes refresh and maintenance possible.
+- **Compound (default look-back)**: after meaningful work, `astack-compound` reads commits since `.astack/last-sync`, asks the agent to review the new diffs for suspicious removals, syncs docs when needed, and writes the smallest durable follow-up — a doc change, `AGENTS.md` rule, skill update, or `<skill>/lessons.md` entry.
 - **Graduate / prune (back-office)**: when a lesson recurs or a skill clearly routed the agent wrong, `astack-skills` promotes the rule into the skill body, sharpens the trigger text, or prunes stale lessons.
 
 No separate user-facing "drift" or "audit" phase is required. The default loop is: write code, compound over the new commits, then update the smallest durable artifact that would have prevented the mistake from recurring.
@@ -140,7 +140,7 @@ No Node, no compile step, no build. The linter is plain TypeScript that Bun runs
 
 ## Philosophy
 
-astack is thin on purpose. Workflow skills are routing prose — judgment, not execution. The deterministic surfaces are the doc linter and the suspicious-commit detector in `astack-compound`; everything else stays soft.
+astack is thin on purpose. Workflow skills are routing prose — judgment, not execution. The one deterministic surface is the doc linter; recent-commit review in `astack-compound` stays prompt-driven so the agent can reason about suspicious examples instead of following a brittle script.
 
 If you want execution-heavy skills (real browser automation, real deploys, real QA harnesses), see [gstack](https://github.com/garrytan/gstack) — astack is the opinion layer that sits above whatever execution tools you pick.
 
@@ -150,7 +150,7 @@ astack stands on the shoulders of a few conventions and essays worth reading dir
 
 - [Effective harnesses for long-running agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) and [Harness design for long-running apps](https://www.anthropic.com/engineering/harness-design-long-running-apps) — Anthropic's posts on how the surface around the model (tools, docs, routing prose) determines whether an agent can sustain long work. astack is a harness: skills are the surface, docs are the state.
 - [Harness engineering](https://openai.com/index/harness-engineering/) — OpenAI's framing of the same idea. The astack routing skills (`astack`, `astack-brainstorm`, etc.) are harness in the sense these posts mean.
-- [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) ([essay](https://every.to/source-code/compound-engineering-the-definitive-guide)) — Every's plugin and Kieran Klaassen's essay on making each unit of engineering work make the next one easier. astack's write → cite → compound → learn → audit loop is the compounding mechanic applied to the skill/doc layer.
+- [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) ([essay](https://every.to/source-code/compound-engineering-the-definitive-guide)) — Every's plugin and Kieran Klaassen's essay on making each unit of engineering work make the next one easier. astack's write → cite → compound → learn → prune loop is the compounding mechanic applied to the skill/doc layer.
 - [Get Shit Done (GSD)](https://github.com/gsd-build/get-shit-done) — spec-driven workflow that fights context rot by externalizing state into files and running each phase in a fresh context. astack's brainstorm → plan → work → review → ship → compound pipeline is the same shape, thinner.
 - [gstack](https://github.com/garrytan/gstack) — execution-heavy skills (browser automation, deploys, QA harnesses). astack is the thin opinion layer that can sit above whatever execution tools you pick.
 

@@ -25,7 +25,7 @@ Use when the user says "ship", "push", "deploy", "PR", or "land".
 
 1. Inspect the current git state first (`git status`, `git diff`, branch)
 2. Keep unrelated changes out of the ship path — stage only what belongs
-3. If the branch is headed to a PR or you recently refreshed from the target branch, run the suspicious-commit detector across the compare range before shipping
+3. If the branch is headed to a PR or you recently refreshed from the target branch, review the compare range for suspicious removals before shipping
 4. Run the relevant checks for the requested level of confidence
 5. Be explicit about what shipped, what was only tested locally, and what still needs validation
 
@@ -64,6 +64,7 @@ Summarize:
 | "Tests probably still pass" | Run them. Probably is not a receipt. |
 | "I'll bundle the unrelated fix in" | No. Unrelated changes leave the ship path. |
 | "The merge conflict is small, I'll just make it compile" | Compiling is not the bar. Preserve remote behavior or ask a human. |
+| "This compare range is too big to read" | That's when feature loss hides. Skim it anyway and call out suspicious removals. |
 | "CI will catch it" | CI catches regressions; you catch "I forgot to save". Run locally first. |
 
 ## Handoff

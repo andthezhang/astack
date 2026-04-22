@@ -1,6 +1,6 @@
 ---
 name: astack-compound
-description: "Use AFTER meaningful work to run the durable look-back pass: read new commits since the last reviewed SHA, sync docs when needed, detect suspicious removals, and write the smallest durable follow-up (docs, AGENTS.md, skill body, or lessons.md)."
+description: "Use AFTER meaningful work to run the durable look-back pass: read new commits since the last reviewed SHA, review them for suspicious removals, sync docs when needed, and write the smallest durable follow-up (docs, AGENTS.md, skill body, or lessons.md)."
 ---
 
 # astack-compound
@@ -41,12 +41,7 @@ If the update belongs under `docs/`, hand off to `astack-docs` for placement and
 
 1. Read `.astack/last-sync` (or another clearly stated reviewed SHA). This is the baseline for the look-back pass.
 2. Read `git log <sha>..HEAD --no-merges --oneline` to see the new commits.
-3. If code changed, run:
-
-   ```bash
-   bash skills/astack-compound/scripts/detect-suspicious-commits.sh <sha> HEAD
-   ```
-
+3. If code changed, read the commit diffs yourself and explicitly look for suspicious changes. No script is required. The agent should do the review.
 4. For each suspicious finding, decide the smallest durable follow-up:
    - reusable mistake → `<skill>/lessons.md`
    - standing workflow rule → skill body or `AGENTS.md`
@@ -73,6 +68,8 @@ Treat these as "stop and look closer" signals, not automatic guilt:
 - service / model / environment reads disappear without an obvious replacement
 - dynamic behavior appears to have been replaced by literals
 - conflict resolution removed remote code outside the requested scope
+- a feature path appears to have been deleted even though the task did not ask for feature removal
+- a UI stops reading live state and now shows fixed text or fixed arrays instead
 
 ## Doc Delta (when docs need to move with the code)
 
@@ -108,6 +105,7 @@ When the look-back pass shows docs drift, use `astack-docs` delta mode to sync:
 | "I'll remember this" | You won't. The next agent definitely won't. |
 | "It's obvious from the code" | If it were obvious, this bug wouldn't have happened. Write it. |
 | "The diff is weird but the task is done" | Weird is the signal. Read the commits and explain the deletion before moving on. |
+| "I only changed one small thing, so this feature removal must be fine" | Small tasks are exactly where shortcut deletions hide. Re-read the diff. |
 | "Docs will catch up later" | Later is never. Do it now or declare "no durable update" explicitly. |
 
 ## Closeout
