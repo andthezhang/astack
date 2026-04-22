@@ -36,6 +36,7 @@ Straightforward code change. No bug to chase, no test-first discipline required.
 - Prefer existing patterns over new abstractions
 - Keep the change small, explicit, easy to verify
 - Stay within scope — resist scope creep even when tempted
+- Default to preservation. If a small or scoped task produces a deletion-heavy diff, removes service/model/environment reads, or replaces dynamic behavior with literals, stop and re-check the scope before keeping the change.
 - Add tests in proportion to risk
 
 ### Mode: Debugging
@@ -94,6 +95,7 @@ When juggling multiple branches concurrently (reviewing one branch while coding 
 - Read the code before deciding how to change it
 - One commit per logical change
 - Don't batch unrelated work in a single commit
+- If you hit a merge or rebase conflict, treat the remote side as the baseline. Reapply only the intended local change. If the resolution would delete remote behavior or you are not sure, ask a human.
 
 ## Red Flags
 

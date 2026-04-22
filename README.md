@@ -16,8 +16,8 @@ astack is a small, opinionated set of routing skills that give AI coding agents 
 | `astack-qa` | Test flows, repro bugs, grade with a rubric |
 | `astack-ship` | Commit, push, PR, deploy |
 | `astack-cleanup` | Non-doc structure fixes (skills, runtime config, entrypoints) |
-| `astack-compound` | Distill durable knowledge after meaningful work (success path) |
-| `astack-skills` | Maintain the skill layer — lessons, audits, drift detection (mistake path) |
+| `astack-compound` | Run the durable look-back: read new commits, sync docs, flag suspicious removals, write lessons/rules |
+| `astack-skills` | Maintain the skill layer itself — graduate recurring lessons, prune stale ones, fix trigger text |
 | `astack-docs` | Init / migrate / lint the docs tree — [OpenAI-style](https://agents.md/) layout, per-scope |
 
 Nine workflow skills + two enforcement skills. The contract is the `astack-docs` allowlist: `AGENTS.md`, `ARCHITECTURE.md`, and a fixed shape under `docs/` that the linter mechanically checks.
@@ -30,12 +30,12 @@ That framing gives astack a natural maintenance loop:
 
 - **Write**: docs capture principles. A skill materializes the view of a doc that routes agents correctly.
 - **Cite**: every skill declares `source_docs:` in its frontmatter — the docs it projects. That citation makes refresh and drift detection possible.
-- **Compound (success path)**: after meaningful work that went well, `astack-compound` distills durable rules and files them in the right home — a doc, a skill body, or `AGENTS.md`.
-- **Learn (mistake path)**: after a user correction or failed output, `astack-skills` captures a lesson in `<skill>/lessons.md`. Recurring lessons graduate into the skill body; stale ones decay after a quarter.
-- **Audit**: monthly, `astack-skills` reads accumulated lessons and proposes graduate / prune / merge / demote / delete. A human applies.
-- **Drift**: daily, `astack-skills` harvests `(commit, doc)` pairs from the last 24h and flags where recent code contradicts a doc a skill claims to materialize.
+- **Compound (default look-back)**: after meaningful work, `astack-compound` reads commits since `.astack/last-sync`, syncs docs when needed, runs a suspicious-commit check, and writes the smallest durable follow-up — a doc change, `AGENTS.md` rule, skill update, or `<skill>/lessons.md` entry.
+- **Graduate / prune (back-office)**: when a lesson recurs or a skill clearly routed the agent wrong, `astack-skills` promotes the rule into the skill body, sharpens the trigger text, or prunes stale lessons.
 
-The whole loop is git-native — no runtime telemetry, no hooks. Git history is the audit log.
+No separate user-facing "drift" or "audit" phase is required. The default loop is: write code, compound over the new commits, then update the smallest durable artifact that would have prevented the mistake from recurring.
+
+The whole loop is git-native — no runtime telemetry. Git history is the audit log.
 
 **Rule of thumb**: `README.md` is for humans. Every other markdown file in an astack-shaped repo is for an AI. Conventions the agent applies belong in a SKILL.md; narrative explanation belongs here.
 
@@ -140,7 +140,7 @@ No Node, no compile step, no build. The linter is plain TypeScript that Bun runs
 
 ## Philosophy
 
-astack is thin on purpose. Workflow skills are routing prose — judgment, not execution. The one deterministic surface is the doc linter, because that's the only thing that needs to block an agent's drift. Everything else stays soft.
+astack is thin on purpose. Workflow skills are routing prose — judgment, not execution. The deterministic surfaces are the doc linter and the suspicious-commit detector in `astack-compound`; everything else stays soft.
 
 If you want execution-heavy skills (real browser automation, real deploys, real QA harnesses), see [gstack](https://github.com/garrytan/gstack) — astack is the opinion layer that sits above whatever execution tools you pick.
 
