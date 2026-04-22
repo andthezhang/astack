@@ -30,6 +30,8 @@ Run it when a fix encodes a standing rule, a decision needs a home, or docs now 
 
 If the update belongs under `docs/`, hand off to `astack-docs` for placement and let its allowlist keep structure honest.
 
+When the trigger is a **mistake** (user correction, failed output, bad advice from a skill) or a **scheduled sweep** (monthly audit, daily drift), use `astack-skills` instead — this skill focuses on post-success capture.
+
 ## Rules
 
 - Prefer updating an existing artifact over creating a new duplicate
@@ -70,6 +72,7 @@ When the pass involves changed code, use `astack-docs` delta mode to sync:
 - Implementation plans → `docs/exec-plans/active/YYYY-MM-DD-<slug>.md` → moved to `completed/` when done
 - Tech debt / deferred cleanup → `docs/exec-plans/tech-debt-tracker.md`
 - Standing local rules → `AGENTS.md` (≤ 150 lines)
+- Mistakes awaiting materialization → `<skill>/lessons.md` (per-skill) or `docs/generated/pending-lessons.md` (orphan)
 
 ## Red Flags
 

@@ -16,10 +16,28 @@ astack is a small, opinionated set of routing skills that give AI coding agents 
 | `astack-qa` | Test flows, repro bugs, grade with a rubric |
 | `astack-ship` | Commit, push, PR, deploy |
 | `astack-cleanup` | Non-doc structure fixes (skills, runtime config, entrypoints) |
-| `astack-compound` | Distill durable knowledge after meaningful work |
+| `astack-compound` | Distill durable knowledge after meaningful work (success path) |
+| `astack-skills` | Maintain the skill layer — lessons, audits, drift detection (mistake path) |
 | `astack-docs` | Init / migrate / lint the docs tree — OpenAI-style layout, per-scope |
 
-Nine workflow skills + one enforcement skill. The contract is the `astack-docs` allowlist: `AGENTS.md`, `ARCHITECTURE.md`, and a fixed shape under `docs/` that the linter mechanically checks.
+Nine workflow skills + two enforcement skills. The contract is the `astack-docs` allowlist: `AGENTS.md`, `ARCHITECTURE.md`, and a fixed shape under `docs/` that the linter mechanically checks.
+
+## Skills as materialized views
+
+astack treats skills as **materialized views on top of docs**. Docs are the source of truth — design decisions, product sense, architecture. Skills are trigger-indexed projections of those docs, shaped to hit the agent's description matcher at the right moment. The two layers serve different readers: docs are canonical and browsed by humans on purpose; skills are short, indexed, and fired by situations.
+
+That framing gives astack a natural maintenance loop:
+
+- **Write**: docs capture principles. A skill materializes the view of a doc that routes agents correctly.
+- **Cite**: every skill declares `source_docs:` in its frontmatter — the docs it projects. That citation makes refresh and drift detection possible.
+- **Compound (success path)**: after meaningful work that went well, `astack-compound` distills durable rules and files them in the right home — a doc, a skill body, or `AGENTS.md`.
+- **Learn (mistake path)**: after a user correction or failed output, `astack-skills` captures a lesson in `<skill>/lessons.md`. Recurring lessons graduate into the skill body; stale ones decay after a quarter.
+- **Audit**: monthly, `astack-skills` reads accumulated lessons and proposes graduate / prune / merge / demote / delete. A human applies.
+- **Drift**: daily, `astack-skills` harvests `(commit, doc)` pairs from the last 24h and flags where recent code contradicts a doc a skill claims to materialize.
+
+The whole loop is git-native — no runtime telemetry, no hooks. Git history is the audit log.
+
+**Rule of thumb**: `README.md` is for humans. Every other markdown file in an astack-shaped repo is for an AI. Conventions the agent applies belong in a SKILL.md; narrative explanation belongs here.
 
 ## The docs contract
 
