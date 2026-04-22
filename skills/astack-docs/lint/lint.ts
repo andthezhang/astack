@@ -57,6 +57,20 @@ const SKIP_DIRS = new Set([
   ".astack", "target", ".venv", "venv", ".turbo", ".cache",
 ]);
 
+// Known skill frontmatter keys. Skills may carry any of these without the
+// linter flagging them as unknown. `name` and `description` are the classic
+// pair; `source_docs`, `verified_at`, and `status` come from the
+// materialized-view model maintained by astack-skills.
+const SKILL_FRONTMATTER_KEYS = new Set([
+  "name", "description",
+  "source_docs", "verified_at", "status",
+]);
+
+// Set ASTACK_SKILLS_INFO=1 to surface info-level notes about skills missing
+// the materialized-view frontmatter. Off by default — the migration hasn't
+// happened across every skill yet, so we don't block.
+const SKILLS_INFO = process.env.ASTACK_SKILLS_INFO === "1";
+
 // Files to ignore anywhere under docs/ (OS/editor junk, not user content).
 const SKIP_FILES = new Set([
   ".DS_Store", "Thumbs.db", ".gitkeep", ".keep",
@@ -371,6 +385,42 @@ async function checkDescendantDrift(scope: string): Promise<string[]> {
   return errors;
 }
 
+// Gently inspect SKILL.md frontmatter under <scope>/skills/*/SKILL.md (if
+// that tree exists). Info-only — never contributes to the error count.
+// Flags skills missing source_docs / verified_at when ASTACK_SKILLS_INFO=1.
+async function checkSkillFrontmatter(scope: string): Promise<string[]> {
+  const notes: string[] = [];
+  if (!SKILLS_INFO) return notes;
+  const skillsDir = join(scope, "skills");
+  if (!existsSync(skillsDir)) return notes;
+  let entries;
+  try { entries = await readdir(skillsDir, { withFileTypes: true }); }
+  catch { return notes; }
+  const tag = relative(process.cwd(), scope) || ".";
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    const file = join(skillsDir, e.name, "SKILL.md");
+    if (!existsSync(file)) continue;
+    const content = await readFile(file, "utf8");
+    const fm = parseFrontmatter(content);
+    if (!fm) continue;
+    const missing: string[] = [];
+    if (!fm["source_docs"]) missing.push("source_docs");
+    if (!fm["verified_at"]) missing.push("verified_at");
+    if (missing.length > 0) {
+      notes.push(
+        `[${tag}] INFO skills/${e.name}/SKILL.md missing ${missing.join(", ")} (materialized-view fields).`,
+      );
+    }
+    for (const key of Object.keys(fm)) {
+      if (!SKILL_FRONTMATTER_KEYS.has(key)) {
+        notes.push(`[${tag}] INFO skills/${e.name}/SKILL.md has unknown frontmatter key '${key}'.`);
+      }
+    }
+  }
+  return notes;
+}
+
 async function main() {
   const root = process.argv[2] ?? process.cwd();
   const scopes = await findScopes(root);
@@ -385,10 +435,14 @@ async function main() {
   }
 
   let all: string[] = [];
+  let infos: string[] = [];
   for (const s of scopes) {
     all = all.concat(await lintScope(s, ALLOWLIST));
     all = all.concat(await checkDescendantDrift(s));
+    infos = infos.concat(await checkSkillFrontmatter(s));
   }
+
+  for (const note of infos) console.log(note);
 
   if (all.length === 0) {
     console.log(`astack-docs: ${scopes.length} scope(s) OK`);
