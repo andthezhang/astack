@@ -18,7 +18,7 @@ astack is a small, opinionated set of routing skills that give AI coding agents 
 | `astack-cleanup` | Non-doc structure fixes (skills, runtime config, entrypoints) |
 | `astack-compound` | Distill durable knowledge after meaningful work (success path) |
 | `astack-skills` | Maintain the skill layer — lessons, audits, drift detection (mistake path) |
-| `astack-docs` | Init / migrate / lint the docs tree — OpenAI-style layout, per-scope |
+| `astack-docs` | Init / migrate / lint the docs tree — [OpenAI-style](https://agents.md/) layout, per-scope |
 
 Nine workflow skills + two enforcement skills. The contract is the `astack-docs` allowlist: `AGENTS.md`, `ARCHITECTURE.md`, and a fixed shape under `docs/` that the linter mechanically checks.
 
@@ -143,6 +143,16 @@ No Node, no compile step, no build. The linter is plain TypeScript that Bun runs
 astack is thin on purpose. Workflow skills are routing prose — judgment, not execution. The one deterministic surface is the doc linter, because that's the only thing that needs to block an agent's drift. Everything else stays soft.
 
 If you want execution-heavy skills (real browser automation, real deploys, real QA harnesses), see [gstack](https://github.com/garrytan/gstack) — astack is the opinion layer that sits above whatever execution tools you pick.
+
+## Prior art
+
+astack stands on the shoulders of a few conventions and essays worth reading directly:
+
+- [Effective harnesses for long-running agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) and [Harness design for long-running apps](https://www.anthropic.com/engineering/harness-design-long-running-apps) — Anthropic's posts on how the surface around the model (tools, docs, routing prose) determines whether an agent can sustain long work. astack is a harness: skills are the surface, docs are the state.
+- [Harness engineering](https://openai.com/index/harness-engineering/) — OpenAI's framing of the same idea. The astack routing skills (`astack`, `astack-brainstorm`, etc.) are harness in the sense these posts mean.
+- [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) ([essay](https://every.to/source-code/compound-engineering-the-definitive-guide)) — Every's plugin and Kieran Klaassen's essay on making each unit of engineering work make the next one easier. astack's write → cite → compound → learn → audit loop is the compounding mechanic applied to the skill/doc layer.
+- [Get Shit Done (GSD)](https://github.com/gsd-build/get-shit-done) — spec-driven workflow that fights context rot by externalizing state into files and running each phase in a fresh context. astack's brainstorm → plan → work → review → ship → compound pipeline is the same shape, thinner.
+- [gstack](https://github.com/garrytan/gstack) — execution-heavy skills (browser automation, deploys, QA harnesses). astack is the thin opinion layer that can sit above whatever execution tools you pick.
 
 ## License
 
