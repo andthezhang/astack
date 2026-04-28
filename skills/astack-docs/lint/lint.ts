@@ -33,6 +33,9 @@ const ALLOWLIST: { required: string[]; allowed: string[] } = {
   ],
   allowed: [
     "docs/design-docs/*.md",
+    "docs/design-docs/stable/*.md",
+    "docs/design-docs/draft/*.md",
+    "docs/design-docs/archived/*.md",
     "docs/exec-plans/active/*.md",
     "docs/exec-plans/completed/*.md",
     "docs/generated/*.md",
@@ -42,11 +45,21 @@ const ALLOWLIST: { required: string[]; allowed: string[] } = {
   ],
 };
 
+// Optional status-named subfolders under docs/design-docs/. When a doc lives
+// in one of these, its frontmatter `status:` must equal the folder name —
+// folder and frontmatter are both sources of truth and divergence is an
+// error. The flat layout (all docs directly under design-docs/) is also
+// valid; mixing flat + subfolders in the same scope is fine.
+const DESIGN_DOC_STATUS_FOLDERS = new Set(["stable", "draft", "archived"]);
+
 // Frontmatter folders: field — required on design-docs + exec-plans.
 // Valid values are read from <scope>/.astack/folders.txt (one per line).
 // The special value "all" is always valid and signals cross-cutting scope.
 const FOLDERS_REQUIRED_DIRS = [
   "docs/design-docs",
+  "docs/design-docs/stable",
+  "docs/design-docs/draft",
+  "docs/design-docs/archived",
   "docs/exec-plans/active",
   "docs/exec-plans/completed",
   "docs/product-specs",
@@ -79,6 +92,9 @@ const SKIP_FILES = new Set([
 // Folders where each *.md (other than index.md) must have YAML frontmatter.
 const FRONTMATTER_DIRS = [
   "docs/design-docs",
+  "docs/design-docs/stable",
+  "docs/design-docs/draft",
+  "docs/design-docs/archived",
   "docs/exec-plans/active",
   "docs/exec-plans/completed",
   "docs/product-specs",
@@ -299,6 +315,23 @@ async function lintScope(scope: string, list: typeof ALLOWLIST): Promise<string[
           `    ---\n    status: draft\n    updated: YYYY-MM-DD\n    folders: [<folder-or-all>]\n    ---`,
         );
         continue;
+      }
+      // Status-folder invariant for design-docs subfolders. When a doc lives
+      // in design-docs/<status>/, its frontmatter status must equal the
+      // folder name (both are sources of truth — must agree).
+      const designDocsPrefix = "docs/design-docs/";
+      if (sub.startsWith(designDocsPrefix)) {
+        const folderStatus = sub.slice(designDocsPrefix.length);
+        if (DESIGN_DOC_STATUS_FOLDERS.has(folderStatus)) {
+          const declared = typeof fm.status === "string" ? fm.status : undefined;
+          if (declared !== folderStatus) {
+            errors.push(
+              `[${tag}] STATUS/FOLDER MISMATCH: ${rel}\n` +
+              `  Folder is '${folderStatus}/' but frontmatter says status: ${declared ?? "(missing)"}.\n` +
+              `  FIX: move the file to docs/design-docs/${declared ?? "<status>"}/, or change the frontmatter to 'status: ${folderStatus}'.`,
+            );
+          }
+        }
       }
       if (!foldersRequiredHere) continue;
       const folders = fm["folders"];

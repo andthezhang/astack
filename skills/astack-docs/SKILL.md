@@ -35,7 +35,10 @@ docs/
 ├── RELIABILITY.md
 ├── SECURITY.md
 ├── design-docs/              # decisions, YAML frontmatter required
-│   └── index.md
+│   ├── index.md
+│   ├── stable/               # optional: split by status. when present,
+│   ├── draft/                # folder name MUST equal frontmatter status:
+│   └── archived/             # — both are sources of truth, must agree.
 ├── exec-plans/
 │   ├── active/
 │   ├── completed/
@@ -103,6 +106,7 @@ Checks inside each scope:
 - YAML frontmatter present on `design-docs/`, `exec-plans/`, `product-specs/`
 - `folders:` frontmatter field present on each design-doc / exec-plan / product-spec, and its values are valid per `.astack/folders.txt`
 - `docs/references/**/*` — any file type, any depth, no shape requirement
+- For docs under `design-docs/{stable,draft,archived}/`: frontmatter `status:` must equal the folder name (folder + frontmatter both source of truth — divergence is an error)
 
 Descendant-drift checks for un-opted-in subdirectories (AGENTS.md present, `.astack/` absent):
 - No `docs/` folder (would be a parallel, unmanaged doc tree)

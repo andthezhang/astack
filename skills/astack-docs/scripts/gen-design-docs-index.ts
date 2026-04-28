@@ -45,26 +45,47 @@ function firstHeadline(content: string): string | null {
 }
 
 interface DocEntry {
-  filename: string;
+  // Path relative to docs/design-docs/ — may include a subfolder like
+  // "stable/foo.md" when status-named subfolders are in use, or just
+  // "foo.md" for the flat layout.
+  relPath: string;
   title: string;
   folders: string[];
   status?: string;
 }
 
-const entries = await readdir(dir, { withFileTypes: true });
-const docs: DocEntry[] = [];
-for (const e of entries) {
-  if (!e.isFile()) continue;
-  if (!e.name.endsWith(".md")) continue;
-  if (e.name === "index.md") continue;
-  const content = await readFile(join(dir, e.name), "utf8");
-  const fm = parseFrontmatter(content);
-  if (!fm) continue;
-  const folders = Array.isArray(fm.folders) ? fm.folders as string[] : (fm.folders ? [fm.folders as string] : ["(untagged)"]);
-  const title = firstHeadline(content) ?? e.name.replace(/\.md$/, "");
-  const status = typeof fm.status === "string" ? fm.status as string : undefined;
-  docs.push({ filename: e.name, title, folders, status });
+const STATUS_SUBDIRS = ["stable", "draft", "archived"];
+
+async function collectDocs(): Promise<DocEntry[]> {
+  const out: DocEntry[] = [];
+  const top = await readdir(dir, { withFileTypes: true });
+  for (const e of top) {
+    if (e.isFile() && e.name.endsWith(".md") && e.name !== "index.md") {
+      await ingest(e.name, join(dir, e.name), out);
+    } else if (e.isDirectory() && STATUS_SUBDIRS.includes(e.name)) {
+      let subEntries;
+      try { subEntries = await readdir(join(dir, e.name), { withFileTypes: true }); }
+      catch { continue; }
+      for (const f of subEntries) {
+        if (!f.isFile() || !f.name.endsWith(".md")) continue;
+        await ingest(`${e.name}/${f.name}`, join(dir, e.name, f.name), out);
+      }
+    }
+  }
+  return out;
 }
+
+async function ingest(relPath: string, absPath: string, out: DocEntry[]): Promise<void> {
+  const content = await readFile(absPath, "utf8");
+  const fm = parseFrontmatter(content);
+  if (!fm) return;
+  const folders = Array.isArray(fm.folders) ? fm.folders as string[] : (fm.folders ? [fm.folders as string] : ["(untagged)"]);
+  const title = firstHeadline(content) ?? relPath.replace(/\.md$/, "");
+  const status = typeof fm.status === "string" ? fm.status as string : undefined;
+  out.push({ relPath, title, folders, status });
+}
+
+const docs: DocEntry[] = await collectDocs();
 
 // Build buckets. Each doc goes in each of its folders' sections, EXCEPT `all`
 // (those get their own cross-cutting section).
@@ -110,11 +131,11 @@ function sectionFor(folder: string, heading: string, anchor: string): string {
   const list = buckets.get(folder);
   if (!list || list.length === 0) return "";
   let s = `## ${heading}\n<a id="${anchor}"></a>\n\n`;
-  const sorted = [...list].sort((a, b) => a.filename.localeCompare(b.filename));
+  const sorted = [...list].sort((a, b) => a.relPath.localeCompare(b.relPath));
   for (const d of sorted) {
     const tags = d.folders.length > 1 ? ` _(also: ${d.folders.filter((f) => f !== folder).join(", ")})_` : "";
     const st = d.status ? ` _[${d.status}]_` : "";
-    s += `- [${d.title}](${d.filename})${st}${tags}\n`;
+    s += `- [${d.title}](${d.relPath})${st}${tags}\n`;
   }
   s += "\n";
   return s;
