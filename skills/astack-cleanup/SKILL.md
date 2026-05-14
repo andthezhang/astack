@@ -1,6 +1,6 @@
 ---
 name: astack-cleanup
-description: "Use to clean up non-doc structure drift — overlapping skills, duplicated runtime config, stale compatibility files, entrypoints that don't match canonical sources. MUST audit before moving. For docs/ structure work (folder layout, AGENTS.md, design-docs, exec-plans, linting), use astack-docs instead."
+description: "Use to clean up non-doc structure drift — overlapping skills, duplicated runtime config, stale compatibility files, entrypoints that don't match canonical sources. MUST audit before moving. For docs/ structure work (folder layout, CONTEXT.md, AGENTS.md/docs/agents, architecture docs, issues, linting), use astack-docs instead."
 ---
 
 # astack-cleanup
@@ -16,7 +16,7 @@ AUDIT BEFORE MOVING. NO SWEEPING RENAMES WITHOUT AN INVENTORY.
 Skip this skill when:
 - the mess is entirely under `docs/` — go to `astack-docs`
 - it's one stale file — just delete it, no process needed
-- the user wants new structure, not cleanup — that's `astack-plan`
+- the user wants new structure, not cleanup — use `astack-brainstorm` to shape it, then `astack-docs` to apply the knowledge contract
 - the drift is inside a single skill file — edit it directly
 
 Use when multiple overlapping or duplicated surfaces need to be reconciled across the repo.
@@ -31,8 +31,8 @@ Covered:
 
 NOT covered (go to `astack-docs`):
 - adding, moving, or removing files under `docs/`
-- editing `AGENTS.md` structure or the doc allowlist
-- migrating existing docs into the OpenAI-style layout
+- editing `CONTEXT.md`, `AGENTS.md`, `docs/agents/`, or the doc allowlist
+- migrating existing docs into the v2 durable homes
 - running the doc linter
 
 ## Default Posture
@@ -47,14 +47,17 @@ NOT covered (go to `astack-docs`):
 **1. Inventory the mess.** Map runtime-specific config in `.claude`/`.codex`, local vs global skills, compatibility files and their dependents, and entrypoints that no longer match canonical sources.
 
 **2. Pick a target shape.** Use the simplest split the repo can support:
-- `AGENTS.md` — thin dispatcher + standing local rules (owned by `astack-docs`)
+- `CONTEXT.md` — durable product words and vocabulary
+- `AGENTS.md` / `docs/agents/` — agent operating rules and dispatch guidance
+- `docs/architecture/ARCHITECTURE.md` — current implemented picture
+- `docs/architecture/decisions/` — decision history with implementation state
+- external issue tracker or `docs/issues/` — product/design/execution work and debt
 - `.claude`, `.codex` — runtime hooks, prompts, config
 - skills — reusable cross-project workflows
-- canonical product/architecture/plan docs → `docs/` (owned by `astack-docs`)
 
 **3. Choose the smallest moves.** Prefer merging duplicates into one canonical location, deleting stale config over rewriting, compatibility links only where they prevent breakage. Avoid giant rename sweeps unless the user explicitly wants one.
 
-**4. Separate by responsibility.** Reusable workflow → skill. Project rule → `AGENTS.md`. Runtime behavior → `.claude`/`.codex`. Doc content → `docs/`. Split files doing several jobs.
+**4. Separate by responsibility.** Reusable workflow → skill. Words → `CONTEXT.md`. Agent rule → `AGENTS.md`/`docs/agents/`. Runtime behavior → `.claude`/`.codex`. Architecture/decision/issue content → `docs/`. Split files doing several jobs.
 
 **5. Verify.** Key entrypoints still resolve, compatibility links unbroken, new structure explainable in one short paragraph.
 
@@ -68,12 +71,12 @@ NOT covered (go to `astack-docs`):
 
 ## Durable Output
 
-If the cleanup encodes a standing rule ("runtime config lives in `.claude/`, not in skills"), record it: standing repo rules in `AGENTS.md`, architectural decisions in `docs/design-docs/<slug>.md`, deferred cleanup in `docs/exec-plans/tech-debt-tracker.md`.
+If the cleanup encodes a standing rule ("runtime config lives in `.claude/`, not in skills"), record it: words in `CONTEXT.md`, agent rules in `AGENTS.md`/`docs/agents/`, current architecture in `docs/architecture/ARCHITECTURE.md`, decisions in `docs/architecture/decisions/<slug>.md`, and deferred cleanup in the external tracker or `docs/issues/active/<slug>.md`.
 
 ## Routing
 
 - Cleanup touches `docs/` → hand off to `astack-docs`
 - User wants investigation only → combine with `astack-review`
-- Cleanup is large → pause and run `astack-plan` first
+- Cleanup is large → pause and run `astack-brainstorm` first
 - Ready to execute → `astack-work`
 - Cleanup changes durable standards → follow with `astack-compound`

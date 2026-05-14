@@ -49,7 +49,7 @@ Score each 1–5. Evaluator and fixer are separate passes.
 
 1. **Functionality** — does it do what the spec or request says, end-to-end?
 2. **Craft** — loading states, error paths, edge cases, no dead clicks, no silent failures
-3. **Design** — matches `docs/DESIGN.md` or the project's system (spacing, hierarchy, color, type)
+3. **Design** — matches the project's design system and any applicable product/design issue in the external tracker or `docs/issues/`
 4. **Originality / product quality** — does it actually solve the user's job, or is it a placeholder that technically works?
 
 Scoring:

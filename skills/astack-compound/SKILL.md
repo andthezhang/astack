@@ -23,8 +23,11 @@ Run it when a fix encodes a standing rule, a decision needs a home, or docs now 
 
 ## Choose the Right Home
 
-- `AGENTS.md` — standing repo/directory rules, dispatch guidance, local conventions
-- `docs/` (owned by `astack-docs`) — decisions, plans, solutions, architecture, product specs
+- `CONTEXT.md` — durable product words, naming, positioning, and vocabulary
+- `docs/architecture/ARCHITECTURE.md` — the current implemented picture
+- `docs/architecture/decisions/` — decision history, each with implementation state
+- External issue tracker or `docs/issues/` — product, design, execution work, and deferred cleanup
+- `AGENTS.md` / `docs/agents/` — standing repo/directory rules, dispatch guidance, local conventions
 - Skills — reusable workflow behavior that travels across projects
 - `.claude` / `.codex` — runtime hooks, prompts, config
 
@@ -45,7 +48,7 @@ When the trigger is a **mistake** (user correction, failed output, bad advice fr
 - A doc is now wrong because of the work
 - A skill should change how future tasks are routed or executed
 - A conversation produced reusable insight worth keeping
-- Code landed that contradicts `docs/design-docs/` or `docs/generated/`
+- Code landed that contradicts `docs/architecture/ARCHITECTURE.md` or `docs/architecture/decisions/`
 
 ## Doc Delta (when the work touched code)
 
@@ -54,10 +57,11 @@ When the pass involves changed code, use `astack-docs` delta mode to sync:
 1. Read `.astack/last-sync` (if missing, treat next step as first sync and write HEAD).
 2. `git log <sha>..HEAD --name-only --no-merges` to list what changed.
 3. For each touched area:
-   - architectural change → new or updated `docs/design-docs/<slug>.md`
-   - finished plan → move from `docs/exec-plans/active/` to `docs/exec-plans/completed/`
-   - new generated artifact → refresh `docs/generated/*`
-   - known debt surfaced → append to `docs/exec-plans/tech-debt-tracker.md`
+   - terminology, positioning, or product language changed → update `CONTEXT.md`
+   - current implemented architecture changed → update `docs/architecture/ARCHITECTURE.md`
+   - a decision was made or revised → add/update `docs/architecture/decisions/<slug>.md` with implementation state
+   - product/design/execution follow-up or debt surfaced → update the external tracker or `docs/issues/active/<slug>.md`
+   - agent operating rules changed → update `AGENTS.md` or `docs/agents/`
 4. Write the new `HEAD` SHA to `.astack/last-sync`.
 5. Run the doc linter. Fix until green:
    ```bash
@@ -68,11 +72,12 @@ When the pass involves changed code, use `astack-docs` delta mode to sync:
 
 ## Durable Paths (quick reference)
 
-- Design decisions → `docs/design-docs/<slug>.md`
-- Implementation plans → `docs/exec-plans/active/YYYY-MM-DD-<slug>.md` → moved to `completed/` when done
-- Tech debt / deferred cleanup → `docs/exec-plans/tech-debt-tracker.md`
-- Standing local rules → `AGENTS.md` (≤ 150 lines)
-- Mistakes awaiting materialization → `<skill>/lessons.md` (per-skill) or `docs/generated/pending-lessons.md` (orphan)
+- Words and vocabulary → `CONTEXT.md`
+- Current implemented architecture → `docs/architecture/ARCHITECTURE.md`
+- Decision history → `docs/architecture/decisions/<slug>.md` with implementation state
+- Product/design/execution/debt work → external issue tracker or `docs/issues/active/<slug>.md`
+- Standing agent rules → `AGENTS.md` (short) or `docs/agents/` (longer/multi-agent)
+- Mistakes awaiting materialization → `<skill>/lessons.md` (per-skill) or `.astack/pending-lessons.md` (orphan)
 
 ## Red Flags
 

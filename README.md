@@ -1,34 +1,33 @@
 # astack
 
-Thin agent-workflow skills for coding work, plus a doc-structure linter. Agent-agnostic — works with any coding agent that respects the SKILL.md convention.
+Thin agent-workflow skills for coding work, plus a repo knowledge contract. Agent-agnostic — works with any coding agent that respects the SKILL.md convention.
 
-astack is a small, opinionated set of routing skills that give AI coding agents a shared vocabulary for brainstorming, planning, execution, review, QA, shipping, cleanup, and knowledge compounding. It also enforces a repo-wide documentation structure so docs don't drift when the agents do most of the writing.
+astack is a small, opinionated set of routing skills that give AI coding agents a shared vocabulary for brainstorming, execution, review, QA, shipping, cleanup, and knowledge compounding. It also enforces a repo-wide documentation structure so docs don't drift when the agents do most of the writing.
 
 ## What's in the box
 
 | Skill | Role |
 |---|---|
 | `astack` | Meta-skill — sizes the task (SMALL/MEDIUM/LARGE) and routes to the right workflow |
-| `astack-brainstorm` | Think through problems before coding |
-| `astack-plan` | Turn requirements into an implementation plan |
+| `astack-brainstorm` | Think through problems before coding, including Matt-style grilling against project docs |
 | `astack-work` | Implement or debug once requirements are clear |
-| `astack-review` | Read-only review of code, docs, or plans |
+| `astack-review` | Read-only review of code, docs, or plans, including Architecture Review mode |
 | `astack-qa` | Test flows, repro bugs, grade with a rubric |
 | `astack-ship` | Commit, push, PR, deploy |
 | `astack-cleanup` | Non-doc structure fixes (skills, runtime config, entrypoints) |
 | `astack-compound` | Distill durable knowledge after meaningful work (success path) |
 | `astack-skills` | Maintain the skill layer — lessons, audits, drift detection (mistake path) |
-| `astack-docs` | Init / migrate / lint the docs tree — [OpenAI-style](https://agents.md/) layout, per-scope |
+| `astack-docs` | Init / migrate / lint the repo knowledge contract |
 
-Nine workflow skills + two enforcement skills. The contract is the `astack-docs` allowlist: `AGENTS.md`, `ARCHITECTURE.md`, and a fixed shape under `docs/` that the linter mechanically checks.
+Seven first-class workflow routes + two maintenance/contract routes, coordinated by the `astack` meta-skill. A separate planning skill is intentionally absent: planning lives in `astack-brainstorm` when the work is still fuzzy, then `astack-work` carries the implementation sequence.
 
 ## Skills as materialized views
 
-astack treats skills as **materialized views on top of docs**. Docs are the source of truth — design decisions, product sense, architecture. Skills are trigger-indexed projections of those docs, shaped to hit the agent's description matcher at the right moment. The two layers serve different readers: docs are canonical and browsed by humans on purpose; skills are short, indexed, and fired by situations.
+astack treats skills as **materialized views on top of docs**. Docs are the source of truth — domain language, current architecture, decision history, issue semantics, and operating rules. Skills are trigger-indexed projections of those docs, shaped to hit the agent's description matcher at the right moment. The two layers serve different readers: docs are canonical and browsed by humans on purpose; skills are short, indexed, and fired by situations.
 
 That framing gives astack a natural maintenance loop:
 
-- **Write**: docs capture principles. A skill materializes the view of a doc that routes agents correctly.
+- **Write**: docs capture domain language, current architecture, decision history, issue semantics, and operating rules. A skill materializes the view of those docs that routes agents correctly.
 - **Cite**: every skill declares `source_docs:` in its frontmatter — the docs it projects. That citation makes refresh and drift detection possible.
 - **Compound (success path)**: after meaningful work that went well, `astack-compound` distills durable rules and files them in the right home — a doc, a skill body, or `AGENTS.md`.
 - **Learn (mistake path)**: after a user correction or failed output, `astack-skills` captures a lesson in `<skill>/lessons.md`. Recurring lessons graduate into the skill body; stale ones decay after a quarter.
@@ -44,34 +43,24 @@ The whole loop is git-native — no runtime telemetry, no hooks. Git history is 
 When a scope opts in (creates `.astack/` at its root), the linter enforces:
 
 ```
-AGENTS.md                     ≤ 150 lines, table of contents
-ARCHITECTURE.md               top-level system map
+AGENTS.md                     agent entrypoint and local instructions
+CONTEXT.md                    domain language
+CONTEXT-MAP.md                path-to-context routing, always present
 docs/
-├── DESIGN.md, FRONTEND.md, PLANS.md, PRODUCT_SENSE.md,
-│   QUALITY_SCORE.md, RELIABILITY.md, SECURITY.md
-├── design-docs/              decisions, YAML frontmatter required
-│   └── index.md
-├── exec-plans/
-│   ├── active/               in-flight plans
-│   ├── completed/
-│   └── tech-debt-tracker.md
-├── generated/                auto-generated artifacts
-├── product-specs/
-├── references/               external docs as *-llms.txt
+├── architecture/
+│   ├── ARCHITECTURE.md       current implemented architecture; visual-first
+│   └── decisions/            architecture decision history with implementation state
+├── agents/
+│   ├── issue-tracker.md      issue backend config
+│   └── triage-labels.md      tracker/status mapping
+├── issues/                   optional local issue backend
+├── references/               external references and copied vendor docs
 └── _legacy/                  temporary quarantine during migration
 ```
 
-Every design-doc, exec-plan, and product-spec needs YAML frontmatter with at minimum:
+`docs/architecture/ARCHITECTURE.md` describes what is implemented now, not what might be built later. It should be visual-first and embed Mermaid diagrams directly in the file. Historical decisions live under `docs/architecture/decisions/*.md`; each decision records implementation state so future agents know whether the decision is proposed, accepted, implemented, superseded, or rejected.
 
-```yaml
----
-status: stable              # or: draft, active, completed, archived
-updated: 2026-04-21
-folders: [mobile]           # subprojects this doc applies to, or [all]
----
-```
-
-Valid values for `folders:` are configured per-repo in `.astack/folders.txt`.
+`CONTEXT-MAP.md` is always present, even in a single-context repo. It tells agents which `CONTEXT.md` vocabulary applies to which paths. `docs/issues/` is optional: use it only when the repo wants local-file issues instead of GitHub, Linear, or another tracker named in `docs/agents/issue-tracker.md`.
 
 ## Install
 
@@ -81,7 +70,7 @@ Using `npx skills`:
 npx skills add andthezhang/astack -g -y
 ```
 
-Installs all 10 `astack-*` skills from the repo's `skills/` folder. The default install path is `~/.agents/skills/<skill-name>/` with symlinks created into every agent's own skill directory (Claude Code, Cursor, Codex, Continue, Crush, and others). Run `npx skills update -y` to pull the latest.
+Installs the `astack` skill family from the repo's `skills/` folder. The default install path is `~/.agents/skills/<skill-name>/` with symlinks created into every agent's own skill directory (Claude Code, Cursor, Codex, Continue, Crush, and others). Run `npx skills update -y` to pull the latest.
 
 For project-local install (skills vendored into the repo instead of installed per-user), add `--project` / `-p` instead of `-g`.
 
@@ -89,8 +78,8 @@ For project-local install (skills vendored into the repo instead of installed pe
 
 Each repo opts in independently. From the repo root:
 
-1. Ask the agent: "initialize astack docs for this repo" — it invokes `astack-docs` in snapshot mode.
-2. The skill walks the existing docs, proposes a migration map, executes moves into the allowlist shape, and writes `.astack/last-sync`.
+1. Ask the agent: "initialize astack docs for this repo" — it invokes `astack-docs` in init/snapshot mode.
+2. The skill walks the existing docs, proposes a migration map, executes moves into the knowledge contract, and writes `.astack/last-sync`.
 3. Commit the initial docs structure.
 4. Install a pre-commit hook that runs the linter. The hook resolves the lint script across common install locations (project-local → user-global → agent-specific), so it works regardless of where the skill got installed:
 
@@ -126,7 +115,7 @@ Each repo opts in independently. From the repo root:
 
 ## Monorepos: single root scope by default
 
-Even in monorepos with multiple subprojects, run one root scope unless a subproject is genuinely a separate product. The linter's descendant-drift check flags rogue `docs/` folders in subprojects and reserved structural markdown (`DESIGN.md`, `FRONTEND.md`, etc.) at subproject roots — nudging you back to a single tree.
+Even in monorepos with multiple subprojects, run one root scope unless a subproject is genuinely a separate product. Use `CONTEXT-MAP.md` to route path ranges to the right domain language instead of creating parallel docs trees.
 
 A subproject genuinely needs its own scope only when it has its own team, release cadence, or is headed for its own repo. In that case, run `astack-docs` snapshot inside it.
 
@@ -140,7 +129,7 @@ No Node, no compile step, no build. The linter is plain TypeScript that Bun runs
 
 ## Philosophy
 
-astack is thin on purpose. Workflow skills are routing prose — judgment, not execution. The one deterministic surface is the doc linter, because that's the only thing that needs to block an agent's drift. Everything else stays soft.
+astack is thin on purpose. Workflow skills are routing prose — judgment, not execution. New techniques become modes inside existing skills, not new top-level skills: Matt-style grilling with docs belongs in `astack-brainstorm`; codebase architecture improvement belongs in `astack-review` Architecture Review mode. The one deterministic surface is the docs contract, because that's the only thing that needs to block an agent's drift. Everything else stays soft.
 
 If you want execution-heavy skills (real browser automation, real deploys, real QA harnesses), see [gstack](https://github.com/garrytan/gstack) — astack is the opinion layer that sits above whatever execution tools you pick.
 
@@ -150,8 +139,9 @@ astack stands on the shoulders of a few conventions and essays worth reading dir
 
 - [Effective harnesses for long-running agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) and [Harness design for long-running apps](https://www.anthropic.com/engineering/harness-design-long-running-apps) — Anthropic's posts on how the surface around the model (tools, docs, routing prose) determines whether an agent can sustain long work. astack is a harness: skills are the surface, docs are the state.
 - [Harness engineering](https://openai.com/index/harness-engineering/) — OpenAI's framing of the same idea. The astack routing skills (`astack`, `astack-brainstorm`, etc.) are harness in the sense these posts mean.
+- [Matt Pocock's skills](https://github.com/mattpocock/skills) — especially [`grill-with-docs`](https://github.com/mattpocock/skills/blob/main/skills/engineering/grill-with-docs/SKILL.md), [`improve-codebase-architecture`](https://github.com/mattpocock/skills/blob/main/skills/engineering/improve-codebase-architecture/SKILL.md), and the repo setup/triage docs. astack adopts the concepts — shared domain language, path-to-context routing, decision history, issue tracker config, and architecture review — but folds them into existing astack routes instead of adding more skills.
 - [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) ([essay](https://every.to/source-code/compound-engineering-the-definitive-guide)) — Every's plugin and Kieran Klaassen's essay on making each unit of engineering work make the next one easier. astack's write → cite → compound → learn → audit loop is the compounding mechanic applied to the skill/doc layer.
-- [Get Shit Done (GSD)](https://github.com/gsd-build/get-shit-done) — spec-driven workflow that fights context rot by externalizing state into files and running each phase in a fresh context. astack's brainstorm → plan → work → review → ship → compound pipeline is the same shape, thinner.
+- [Get Shit Done (GSD)](https://github.com/gsd-build/get-shit-done) — spec-driven workflow that fights context rot by externalizing state into files and running each phase in a fresh context. astack keeps the same bias toward externalized state while collapsing planning into brainstorm/work.
 - [gstack](https://github.com/garrytan/gstack) — execution-heavy skills (browser automation, deploys, QA harnesses). astack is the thin opinion layer that can sit above whatever execution tools you pick.
 
 ## License

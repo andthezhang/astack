@@ -1,93 +1,165 @@
 ---
 name: astack-docs
-description: "Initialize, migrate, maintain, and lint a repo's docs/ structure in the OpenAI-style layout — AGENTS.md, ARCHITECTURE.md, and docs/ with design-docs, exec-plans, generated, product-specs, references, and _legacy folders. Use when setting up docs in a fresh repo, bringing an existing repo under the allowlist, running the doc linter, or syncing docs after code changes. Works per-scope: any directory with its own AGENTS.md is an independent scope, so monorepos opt in per subproject."
+description: "Initialize, migrate, maintain, and lint a repo's v2 knowledge contract: AGENTS.md, CONTEXT.md, CONTEXT-MAP.md, docs/architecture, docs/agents, optional local issues, references, and _legacy. Use when setting up docs in a fresh repo, bringing an existing repo under the allowlist, running the doc linter, or syncing docs after code changes. Works per-scope: a directory opts in when it has both AGENTS.md and .astack/."
 ---
 
 # astack-docs
 
-One skill for all doc-structure work. The allowlist is the contract. Anything under `docs/` not on the allowlist fails the linter.
+One skill for repo knowledge structure. The allowlist is the contract. Anything under `docs/` outside the contract fails the linter.
 
 ## Iron Law
 
-NO DOC OUTSIDE THE ALLOWLIST. NO SCOPE WITHOUT `.astack/` OPT-IN.
+NO PRIMARY DOC OUTSIDE THE V2 CONTRACT. NO MANAGED SCOPE WITHOUT `.astack/` OPT-IN.
+
+`design-docs/`, `exec-plans/`, and `product-specs/` are retired primary concepts. Existing material may live under `docs/_legacy/`, but new knowledge must land in the v2 homes below.
 
 ## Right-Size
 
 Skip this skill when:
-- the user wants code cleanup, not doc cleanup — go to `astack-cleanup`
-- the work is editing content inside an existing allowed doc — just edit it
-- the user wants a plan drafted, not filed under `docs/exec-plans/` — start in `astack-plan`
-- the repo is not opted in yet and the user didn't ask to opt in — ask first
+- the user wants code cleanup, not doc cleanup - go to `astack-cleanup`
+- the work is editing content inside an existing allowed doc - just edit it
+- the user wants planning help but not repo knowledge updates - start in `astack-brainstorm`
+- the repo is not opted in yet and the user did not ask to opt in - ask first
 
 Use when filing, moving, initializing, syncing, or linting doc structure.
 
 ## Target Shape
 
 ```
-AGENTS.md                     # ≤150 lines, table of contents
-ARCHITECTURE.md               # top-level map of the system
+AGENTS.md                         # agent routing and local rules, max 150 lines
+CONTEXT.md                        # current repo/product context
+CONTEXT-MAP.md                    # map of important markdown docs and where to look
+DESIGN.md                         # optional standing doc
+FRONTEND.md                       # optional standing doc
+SECURITY.md                       # optional standing doc
+RELIABILITY.md                    # optional standing doc
 docs/
-├── DESIGN.md
-├── FRONTEND.md
-├── PLANS.md
-├── PRODUCT_SENSE.md
-├── QUALITY_SCORE.md
-├── RELIABILITY.md
-├── SECURITY.md
-├── design-docs/              # decisions, YAML frontmatter required
-│   ├── index.md
-│   ├── stable/               # optional: split by status. when present,
-│   ├── draft/                # folder name MUST equal frontmatter status:
-│   └── archived/             # — both are sources of truth, must agree.
-├── exec-plans/
+├── architecture/
+│   ├── ARCHITECTURE.md           # canonical system map
+│   └── decisions/
+│       └── *.md                  # architecture decisions, YAML frontmatter required
+├── agents/
+│   ├── issue-tracker.md          # how local issues are managed
+│   └── triage-labels.md          # allowed label vocabulary and usage
+├── issues/
 │   ├── active/
-│   ├── completed/
-│   └── tech-debt-tracker.md
-├── generated/                # must carry a "GENERATED" header comment
-├── product-specs/
-│   └── index.md
-├── references/               # external docs; any file type, any depth
-└── _legacy/                  # temporary quarantine during migration
+│   │   └── *.md                  # optional local issues, YAML frontmatter required
+│   └── completed/
+│       └── *.md                  # optional completed local issues
+├── references/                   # external docs; any file type, any depth
+└── _legacy/                      # quarantine for old docs and migrations
 ```
+
+Required files:
+- `AGENTS.md`
+- `CONTEXT.md`
+- `CONTEXT-MAP.md`
+- `docs/architecture/ARCHITECTURE.md`
+- `docs/agents/issue-tracker.md`
+- `docs/agents/triage-labels.md`
+
+Allowed but not required at the scope root:
+- `DESIGN.md`
+- `FRONTEND.md`
+- `SECURITY.md`
+- `RELIABILITY.md`
+
+## Document Roles
+
+`AGENTS.md` is the operating map for agents. Keep it short and link out.
+
+`CONTEXT.md` is the current shape of the product, repo, and runtime. It should help an agent rejoin the work without rereading every file.
+
+`CONTEXT-MAP.md` is the index of durable knowledge. Use normal markdown links or backticked paths to point at important markdown docs. The linter checks referenced markdown paths when it can.
+
+`docs/architecture/ARCHITECTURE.md` is the canonical architecture map. Put stable system shape here, not temporary plans.
+
+`docs/architecture/decisions/*.md` holds decisions. Decisions are not design docs; they record what was chosen, why, and how far implementation has gone.
+
+`docs/issues/active/*.md` and `docs/issues/completed/*.md` are local issues. Use them for repo-local follow-up when GitHub issues are not the right place.
+
+`docs/references/**` holds external material: vendor docs, API specs, papers, llms.txt dumps, screenshots, and other reference files. The linter accepts any file type at any depth.
+
+`docs/_legacy/**` is a quarantine. Existing work can move there during migration. Do not create new primary knowledge there.
+
+## Architecture Decision Frontmatter
+
+Every file in `docs/architecture/decisions/*.md` starts with:
+
+```yaml
+---
+status: accepted              # proposed, accepted, or superseded
+implementation: partial       # planned, partial, or implemented
+updated: 2026-05-06           # YYYY-MM-DD
+tracks:
+  - docs/issues/active/example.md
+---
+```
+
+Rules:
+- `status`, `implementation`, and `updated` are required.
+- `implementation: planned` or `implementation: partial` requires `tracks`.
+- `implementation: implemented` requires `evidence`.
+- `status: superseded` requires `superseded_by`.
+- `updated` uses `YYYY-MM-DD`.
+
+Use `tracks` for open work and `evidence` for landed code, PRs, tests, deploy receipts, or other proof.
+
+## Local Issue Frontmatter
+
+Every file in `docs/issues/active/*.md` or `docs/issues/completed/*.md` starts with:
+
+```yaml
+---
+status: active                # must match the folder: active or completed
+updated: 2026-05-06           # YYYY-MM-DD
+labels: [docs]
+---
+```
+
+Rules:
+- `status`, `updated`, and `labels` are required.
+- `status` must match the folder.
+- `labels` is a non-empty YAML array.
+- Label meanings live in `docs/agents/triage-labels.md`.
 
 ## Single Scope Is the Default
 
-Most monorepos should run with one root scope. Splitting invites duplication — cross-cutting docs (security, architecture, pipelines spanning tiers) have no clean home and end up copied. Split only when a subproject is genuinely a separate product: own team, own release cadence, or on the path to its own repo. A backend and its iOS client in one repo usually isn't that.
+Most monorepos should run with one root scope. Split only when a subproject is genuinely a separate product: own team, own release cadence, or on the path to its own repo.
 
 When a subproject stays under the root scope:
+- Keep its `AGENTS.md` for agent routing context if needed.
+- Do not add a `docs/` folder inside it.
+- Do not add `CONTEXT.md`, `CONTEXT-MAP.md`, `ARCHITECTURE.md`, `DESIGN.md`, `FRONTEND.md`, `SECURITY.md`, or `RELIABILITY.md` at its root.
+- Point durable content to the root knowledge tree via a short pointer block in its `AGENTS.md`.
 
-- Keep its `AGENTS.md` for agent routing context
-- Do **not** add a `docs/` folder inside it
-- Do **not** add structural markdown (`DESIGN.md`, `FRONTEND.md`, `PLANS.md`, `PRODUCT_SENSE.md`, `QUALITY_SCORE.md`, `RELIABILITY.md`, `SECURITY.md`) at its root
-- Point new content to the root docs tree via a short pointer block in its `AGENTS.md`:
+The linter enforces this with descendant-drift checks. When a subproject genuinely needs its own scope, run snapshot mode from that subproject root to create `.astack/` and graduate it.
 
-```md
-## Docs
-Architectural docs, design-docs, and exec-plans live at the repo root:
-- `../AGENTS.md`, `../docs/design-docs/`, `../docs/exec-plans/active/`
-
-Write new doc content at the root tree. Do not add a docs/ folder here.
-```
-
-The linter enforces this via descendant-drift checks (Mode 3). When a subproject genuinely needs its own scope, opt in by running snapshot mode from that subproject's root — creates `.astack/` and graduates it.
-
-## Mode 1: Snapshot (first-time init)
+## Mode 1: Snapshot
 
 Use when no `AGENTS.md` exists in the scope or the user wants to opt the repo in.
 
-1. Read the repo. List every existing doc-like file: root markdown, `docs/`, `design/`, `specs/`, `.github/`, anywhere else.
-2. Propose a migration map as one table: each existing file → destination (design-doc / product-spec / exec-plan / architecture / `_legacy` / delete). User approves once.
-3. On approval: write `AGENTS.md`, `ARCHITECTURE.md`, and required `docs/*` files with project-specific content (read the code first — no `# Section (fill in)` stubs); move existing docs to destinations with YAML frontmatter; send unclassifiable files to `docs/_legacy/`; write `lefthook.yml` with a pre-commit hook running the linter; `lefthook install`; write `.astack/last-sync` with `git rev-parse HEAD`.
-4. Run the linter. Fix until green.
+1. Read the repo. List existing doc-like files: root markdown, `docs/`, `design/`, `specs/`, `.github/`, and other obvious knowledge files.
+2. Propose a migration map: each existing file -> v2 destination (`CONTEXT.md`, `CONTEXT-MAP.md`, architecture, decision, local issue, reference, `_legacy`, or delete). User approves once.
+3. On approval: write required v2 files with project-specific content. Move retired `design-docs/`, `exec-plans/`, and `product-specs/` material under `docs/_legacy/` unless it is actively rewritten into the v2 model.
+4. Write `.astack/last-sync` with `git rev-parse HEAD`.
+5. Run the linter and fix until green.
 
-## Mode 2: Delta (periodic sync)
+## Mode 2: Delta
 
-Use after meaningful work when docs may have drifted. Usually triggered by `astack-compound`.
+Use after meaningful work when durable knowledge may have drifted. Usually triggered by `astack-compound`.
 
 1. Read `.astack/last-sync`.
-2. `git log <sha>..HEAD --name-only --no-merges` to list changed paths.
-3. Route each touched area: new schemas → `docs/generated/*`; architectural change → `docs/design-docs/<slug>.md`; finished plan → move `docs/exec-plans/active/` → `docs/exec-plans/completed/`; known debt → append to `docs/exec-plans/tech-debt-tracker.md`.
-4. Write new HEAD to `.astack/last-sync`. Run the linter. Fix until green.
+2. Use `git log <sha>..HEAD --name-only --no-merges` to list changed paths.
+3. Route each touched area:
+   - standing context drift -> update `CONTEXT.md` or `CONTEXT-MAP.md`
+   - architecture shape changed -> update `docs/architecture/ARCHITECTURE.md`
+   - decision made -> write or update `docs/architecture/decisions/<slug>.md`
+   - follow-up needed -> write `docs/issues/active/<slug>.md`
+   - follow-up finished -> move active issue to `docs/issues/completed/`
+   - external material -> store under `docs/references/`
+4. Write new HEAD to `.astack/last-sync`.
+5. Run the linter and fix until green.
 
 ## Mode 3: Lint
 
@@ -97,52 +169,30 @@ Deterministic. No judgment. Runs from pre-commit, CI, or on demand.
 bun run ~/.agents/skills/astack-docs/lint/lint.ts [scope-path]
 ```
 
-Default scope is the current working directory. The script walks down, finds every opted-in scope (directory with both `AGENTS.md` and `.astack/`), and lints each against the allowlist. Exits non-zero on violation with an actionable `FIX:` line per error. `.DS_Store`, `Thumbs.db`, `.gitkeep`, and `.keep` are skipped automatically.
+Default scope is the current working directory. The script walks down, finds every opted-in scope (directory with both `AGENTS.md` and `.astack/`), and lints each against the allowlist. It exits non-zero on violations with actionable `FIX:` lines.
 
 Checks inside each scope:
-- Required files exist
-- `AGENTS.md` ≤ 150 lines
-- No files under `docs/` outside the allowlist
-- YAML frontmatter present on `design-docs/`, `exec-plans/`, `product-specs/`
-- `folders:` frontmatter field present on each design-doc / exec-plan / product-spec, and its values are valid per `.astack/folders.txt`
-- `docs/references/**/*` — any file type, any depth, no shape requirement
-- For docs under `design-docs/{stable,draft,archived}/`: frontmatter `status:` must equal the folder name (folder + frontmatter both source of truth — divergence is an error)
+- Required files exist.
+- `AGENTS.md` is at most 150 lines.
+- Files under `docs/` match the v2 allowlist.
+- Retired primary folders (`docs/design-docs/`, `docs/exec-plans/`, `docs/product-specs/`) are absent except under `docs/_legacy/`.
+- Architecture decisions have required frontmatter and conditional fields.
+- Local issues have required frontmatter and folder-matching status.
+- `CONTEXT-MAP.md` references to markdown paths resolve when practical.
+- `docs/references/**/*` and `docs/_legacy/**/*` accept any file type and depth.
 
-Descendant-drift checks for un-opted-in subdirectories (AGENTS.md present, `.astack/` absent):
-- No `docs/` folder (would be a parallel, unmanaged doc tree)
-- No reserved structural markdown at the subdirectory root (`DESIGN.md`, `FRONTEND.md`, `PLANS.md`, `PRODUCT_SENSE.md`, `QUALITY_SCORE.md`, `RELIABILITY.md`, `SECURITY.md`)
-- `ARCHITECTURE.md` is allowed at subdirectory roots — packages may reasonably describe their own internals without opting into scope management.
-
-## Frontmatter Convention
-
-Every design-doc, exec-plan, and product-spec starts with:
-
-```yaml
----
-status: stable              # or: draft, active, completed, archived
-updated: 2026-04-21         # YYYY-MM-DD
-folders: [mobile]           # subprojects this doc applies to
----
-```
-
-The `folders:` field is always an array, even with one value (`[service]`). Use `[service, mobile]` for docs spanning surfaces, and `[all]` only for genuinely cross-cutting content (architecture, system-wide decisions) — prefer specific folders otherwise. Valid values are configured per-scope in `.astack/folders.txt` (one name per line, `#` for comments); `all` is always implicit.
-
-`folders` powers index grouping, filtering ("what design-docs apply to `service`?"), and ownership clarity for multi-surface changes.
-
-## References folder
-
-`docs/references/` holds external material — vendor docs, API specs, papers, llms.txt dumps. The linter accepts **any file type, any depth**; organize by source (e.g. `docs/references/<vendor>/<file>`). No frontmatter required. Keep it tidy; the linter won't.
+Ignored anywhere under `docs/`: `.DS_Store`, `Thumbs.db`, `.gitkeep`, and `.keep`.
 
 ## Working Rules
 
 - Write project-specific content. Never placeholder stubs.
-- Read the code before writing `ARCHITECTURE.md` or design-docs.
-- `_legacy/` is temporary — existing work continues, but new content never lands there.
-- Don't bypass the linter with `--no-verify`. Fix the root cause.
-- `AGENTS.md` is a map, not a manual. If it grows past 150 lines, move content into `docs/` and link.
+- Read code before writing `CONTEXT.md`, `ARCHITECTURE.md`, or decisions.
+- Keep `_legacy/` temporary. New primary knowledge does not land there.
+- Do not bypass the linter with `--no-verify`. Fix the root cause.
+- Keep `AGENTS.md` as a map, not a manual. If it grows past 150 lines, move content into the v2 knowledge tree and link.
 
 ## Handoffs
 
-- Non-doc structure (overlapping skills, runtime config, entrypoints) → `astack-cleanup`
-- Triggered after meaningful work → usually entered via `astack-compound`
-- `astack-wiki` is retired. Synthesized knowledge lives in `docs/design-docs/`; external refs in `docs/references/`
+- Non-doc structure drift -> `astack-cleanup`
+- Durable knowledge capture after meaningful work -> usually entered via `astack-compound`
+- Runtime plans that should become work items -> `docs/issues/active/*.md`

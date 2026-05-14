@@ -1,26 +1,30 @@
 ---
 name: astack-work
-description: "Use for implementation, debugging, or execution of a clear plan. Routes into a sub-mode based on what's happening: standard implementation, bug investigation, TDD, parallel subagents, or worktrees. Invoke only after sizing is clear via astack."
+description: "Use for implementation, debugging, or execution of a clear request or issue-shaped work artifact. Routes into implementation, debugging, TDD, parallel subagents, or worktrees."
 ---
 
 # astack-work
 
-Execute the task. The task is clear enough to act on.
+Execute the task. The request, issue, or work artifact is clear enough to act on.
 
 ## Iron Law
 
 **NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION OUTPUT.**
 If you haven't run the verification command in this message, you cannot claim it passes.
 
+**NO ARCHITECTURE REFACTOR WITHOUT ARCHITECTURE REVIEW.**
+If the task is an architecture refactor, boundary cleanup, module split/merge, or interface redesign, run `astack-review` in Architecture Review mode first and work from those findings.
+
 ## Right-Size
 
 Use this skill when:
-- requirements are clear (user's intent is obvious, or a plan exists)
-- the task is sized SMALL or MEDIUM, OR the LARGE task has an approved design
+- requirements are clear (the user's intent is obvious, a clear issue exists, or a work artifact exists)
+- the task is sized SMALL or MEDIUM, OR the LARGE task has an approved issue/work artifact
+- the user explicitly says to implement a concrete change
 
 Skip / defer when:
 - requirements fuzzy → go back to `astack-brainstorm`
-- needs sequencing → `astack-plan`
+- architecture refactor without prior Architecture Review → `astack-review`
 - just reviewing, no code changes → `astack-review`
 - running tests against the product for bug hunting → `astack-qa`
 
@@ -32,6 +36,7 @@ Pick exactly one. Announce which mode you're in at the start of the work.
 
 Straightforward code change. No bug to chase, no test-first discipline required.
 
+- Read the issue/work artifact first when one exists
 - Read the code around the change first
 - Prefer existing patterns over new abstractions
 - Keep the change small, explicit, easy to verify
@@ -91,6 +96,7 @@ When juggling multiple branches concurrently (reviewing one branch while coding 
 ## Working Style (all modes)
 
 - Read the nearest `AGENTS.md` first
+- Read `CONTEXT.md`, `CONTEXT-MAP.md`, and architecture docs when they are relevant to the change
 - Read the code before deciding how to change it
 - One commit per logical change
 - Don't batch unrelated work in a single commit
@@ -121,4 +127,5 @@ Before declaring done:
 - Tests pass, code is ready → `astack-ship`
 - Need extra review → `astack-review` (code) or `astack-qa` (runtime)
 - Bug surfaced unexpectedly → stay in this skill, switch to Debugging mode
-- Discovered the task is bigger than sized → back to `astack` for re-sizing
+- Discovered the task is fuzzier than sized → back to `astack-brainstorm`
+- Discovered architectural boundary risk → `astack-review` in Architecture Review mode
