@@ -1,8 +1,7 @@
 #!/usr/bin/env bun
-// astack-docs linter.
+// astack-docs v2 linter.
 // Walks down from a given path, finds every opted-in scope (directory with
-// both AGENTS.md and .astack/), and enforces the allowlist against each
-// scope's docs/ tree.
+// both AGENTS.md and .astack/), and enforces the v2 knowledge contract.
 //
 // Usage: bun run lint.ts [scope-path]
 //        (default scope-path: cwd)
@@ -13,57 +12,53 @@ import { join, relative } from "node:path";
 
 const MAX_AGENTS_LINES = 150;
 
-// The astack-docs allowlist. This is the contract — intentionally inline.
-// Paths are relative to a scope root. Glob syntax: * (no slash), ** (any
-// depth). REQUIRED files must exist. ALLOWED patterns are permitted.
+// The astack-docs v2 allowlist. This is the contract. Paths are relative to
+// a scope root. Glob syntax: * (no slash), ** (any depth). REQUIRED files
+// must exist. ALLOWED patterns are permitted when present.
 const ALLOWLIST: { required: string[]; allowed: string[] } = {
   required: [
     "AGENTS.md",
-    "ARCHITECTURE.md",
-    "docs/DESIGN.md",
-    "docs/FRONTEND.md",
-    "docs/PLANS.md",
-    "docs/PRODUCT_SENSE.md",
-    "docs/QUALITY_SCORE.md",
-    "docs/RELIABILITY.md",
-    "docs/SECURITY.md",
-    "docs/design-docs/index.md",
-    "docs/product-specs/index.md",
-    "docs/exec-plans/tech-debt-tracker.md",
+    "CONTEXT.md",
+    "CONTEXT-MAP.md",
+    "docs/architecture/ARCHITECTURE.md",
+    "docs/agents/issue-tracker.md",
+    "docs/agents/triage-labels.md",
   ],
   allowed: [
-    "docs/design-docs/*.md",
-    "docs/design-docs/stable/*.md",
-    "docs/design-docs/draft/*.md",
-    "docs/design-docs/archived/*.md",
-    "docs/exec-plans/active/*.md",
-    "docs/exec-plans/completed/*.md",
-    "docs/generated/*.md",
-    "docs/product-specs/*.md",
+    "DESIGN.md",
+    "FRONTEND.md",
+    "SECURITY.md",
+    "RELIABILITY.md",
+    "docs/architecture/decisions/*.md",
+    "docs/issues/active/*.md",
+    "docs/issues/completed/*.md",
     "docs/references/**/*",
     "docs/_legacy/**/*",
   ],
 };
 
-// Optional status-named subfolders under docs/design-docs/. When a doc lives
-// in one of these, its frontmatter `status:` must equal the folder name —
-// folder and frontmatter are both sources of truth and divergence is an
-// error. The flat layout (all docs directly under design-docs/) is also
-// valid; mixing flat + subfolders in the same scope is fine.
-const DESIGN_DOC_STATUS_FOLDERS = new Set(["stable", "draft", "archived"]);
+const DECISION_DIR = "docs/architecture/decisions";
+const ISSUE_DIRS = new Map([
+  ["docs/issues/active", "active"],
+  ["docs/issues/completed", "completed"],
+]);
 
-// Frontmatter folders: field — required on design-docs + exec-plans.
-// Valid values are read from <scope>/.astack/folders.txt (one per line).
-// The special value "all" is always valid and signals cross-cutting scope.
-const FOLDERS_REQUIRED_DIRS = [
+const IMPLEMENTATION_VALUES = new Set(["planned", "partial", "implemented"]);
+
+// These v1 primary folders are only allowed below docs/_legacy/.
+const RETIRED_PRIMARY_DOC_DIRS = [
   "docs/design-docs",
-  "docs/design-docs/stable",
-  "docs/design-docs/draft",
-  "docs/design-docs/archived",
-  "docs/exec-plans/active",
-  "docs/exec-plans/completed",
+  "docs/exec-plans",
   "docs/product-specs",
 ];
+
+// Old root-level standing files that conflict with v2 placement.
+const RETIRED_ROOT_FILES = new Map([
+  ["ARCHITECTURE.md", "docs/architecture/ARCHITECTURE.md"],
+  ["PLANS.md", "docs/issues/active/ or docs/_legacy/"],
+  ["PRODUCT_SENSE.md", "CONTEXT.md or docs/_legacy/"],
+  ["QUALITY_SCORE.md", "docs/issues/active/ or docs/_legacy/"],
+]);
 
 const SKIP_DIRS = new Set([
   ".git", "node_modules", ".next", "dist", "build",
@@ -71,17 +66,14 @@ const SKIP_DIRS = new Set([
 ]);
 
 // Known skill frontmatter keys. Skills may carry any of these without the
-// linter flagging them as unknown. `name` and `description` are the classic
-// pair; `source_docs`, `verified_at`, and `status` come from the
-// materialized-view model maintained by astack-skills.
+// linter flagging them as unknown. This is info-only and never blocks.
 const SKILL_FRONTMATTER_KEYS = new Set([
   "name", "description",
   "source_docs", "verified_at", "status",
 ]);
 
 // Set ASTACK_SKILLS_INFO=1 to surface info-level notes about skills missing
-// the materialized-view frontmatter. Off by default — the migration hasn't
-// happened across every skill yet, so we don't block.
+// the materialized-view frontmatter. Off by default.
 const SKILLS_INFO = process.env.ASTACK_SKILLS_INFO === "1";
 
 // Files to ignore anywhere under docs/ (OS/editor junk, not user content).
@@ -89,27 +81,16 @@ const SKIP_FILES = new Set([
   ".DS_Store", "Thumbs.db", ".gitkeep", ".keep",
 ]);
 
-// Folders where each *.md (other than index.md) must have YAML frontmatter.
-const FRONTMATTER_DIRS = [
-  "docs/design-docs",
-  "docs/design-docs/stable",
-  "docs/design-docs/draft",
-  "docs/design-docs/archived",
-  "docs/exec-plans/active",
-  "docs/exec-plans/completed",
-  "docs/product-specs",
-];
-
-// Structural markdown filenames that should only exist inside an opted-in
-// scope's docs/ tree. Seeing them at the root of an un-opted-in descendant
-// (a subproject with AGENTS.md but no .astack/) means a parallel doc tree
-// is forming — drift. ARCHITECTURE.md is intentionally omitted; subpackages
-// may reasonably describe their own architecture without opting into scope
-// management.
-const RESERVED_STRUCTURAL_FILES = new Set([
-  "DESIGN.md", "FRONTEND.md", "PLANS.md", "PRODUCT_SENSE.md",
-  "QUALITY_SCORE.md", "RELIABILITY.md", "SECURITY.md",
+// Structural markdown filenames that belong only to opted-in scope roots.
+// Seeing them in an un-opted-in descendant with AGENTS.md means a parallel
+// managed knowledge tree is forming.
+const RESERVED_DESCENDANT_FILES = new Set([
+  "CONTEXT.md", "CONTEXT-MAP.md", "ARCHITECTURE.md",
+  "DESIGN.md", "FRONTEND.md", "SECURITY.md", "RELIABILITY.md",
+  "PLANS.md", "PRODUCT_SENSE.md", "QUALITY_SCORE.md",
 ]);
+
+type Frontmatter = Record<string, string | string[]>;
 
 function globToRegex(glob: string): RegExp {
   let re = "^";
@@ -144,74 +125,106 @@ function norm(p: string): string {
   return p.split("\\").join("/");
 }
 
-// Read <scope>/.astack/folders.txt and return the set of valid folder names.
-// Returns an empty set (no folder validation) if the file doesn't exist —
-// this keeps the check opt-in per scope rather than hard-failing repos that
-// haven't configured it yet. "all" is always implicitly valid.
-async function readFoldersConfig(scope: string): Promise<Set<string> | null> {
-  const path = join(scope, ".astack", "folders.txt");
-  if (!existsSync(path)) return null;
-  const raw = await readFile(path, "utf8");
-  const out = new Set<string>();
-  for (const line of raw.split("\n")) {
-    const t = line.trim();
-    if (!t || t.startsWith("#")) continue;
-    out.add(t);
-  }
-  return out;
+function stripQuotes(value: string): string {
+  return value.trim().replace(/^["']|["']$/g, "");
 }
 
 // Parse minimal YAML frontmatter at the top of a markdown file.
-// Only handles the shapes we need: scalar string, YAML list inline [a, b],
-// and YAML list block (next line with "- a"). Good enough for lint checks.
-function parseFrontmatter(content: string): Record<string, string | string[]> | null {
+// Handles scalar strings, inline YAML lists [a, b], and block lists.
+function parseFrontmatter(content: string): Frontmatter | null {
   if (!content.startsWith("---\n") && !content.startsWith("---\r\n")) return null;
   const rest = content.slice(content.indexOf("\n") + 1);
   const endIdx = rest.indexOf("\n---");
   if (endIdx < 0) return null;
+
   const block = rest.slice(0, endIdx);
-  const out: Record<string, string | string[]> = {};
+  const out: Frontmatter = {};
   const lines = block.split(/\r?\n/);
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*)$/);
     if (!m) continue;
+
     const key = m[1];
     let val: string | string[] = m[2].trim();
-    if (typeof val === "string" && val.startsWith("[") && val.endsWith("]")) {
-      val = val.slice(1, -1).split(",").map((s) => s.trim()).filter((s) => s.length > 0)
-        .map((s) => s.replace(/^["']|["']$/g, ""));
+    if (val.startsWith("[") && val.endsWith("]")) {
+      val = val.slice(1, -1)
+        .split(",")
+        .map(stripQuotes)
+        .filter((s) => s.length > 0);
     } else if (val === "") {
       const items: string[] = [];
       while (i + 1 < lines.length) {
         const next = lines[i + 1];
         const im = next.match(/^\s*-\s+(.*)$/);
         if (!im) break;
-        items.push(im[1].trim().replace(/^["']|["']$/g, ""));
+        items.push(stripQuotes(im[1]));
         i++;
       }
       if (items.length > 0) val = items;
-    } else if (typeof val === "string") {
-      val = val.replace(/^["']|["']$/g, "");
+    } else {
+      val = stripQuotes(val);
     }
     out[key] = val;
   }
+
   return out;
 }
 
+function scalar(fm: Frontmatter, key: string): string | undefined {
+  const value = fm[key];
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function hasValue(fm: Frontmatter, key: string): boolean {
+  const value = fm[key];
+  if (Array.isArray(value)) return value.some((item) => item.trim().length > 0);
+  if (typeof value === "string") return value.trim().length > 0;
+  return false;
+}
+
+function isNonEmptyArray(fm: Frontmatter, key: string): boolean {
+  const value = fm[key];
+  return Array.isArray(value) && value.some((item) => item.trim().length > 0);
+}
+
+function isDateString(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function requireFrontmatter(
+  errors: string[],
+  tag: string,
+  rel: string,
+  content: string,
+  example: string,
+): Frontmatter | null {
+  const fm = parseFrontmatter(content);
+  if (fm) return fm;
+  errors.push(
+    `[${tag}] MISSING FRONTMATTER: ${rel}\n` +
+    `  FIX: add a YAML block at the top:\n${example}`,
+  );
+  return null;
+}
+
 // A scope is opted into astack-docs when it has BOTH AGENTS.md AND a .astack/
-// directory at its root. AGENTS.md alone just means Claude Code has routing
-// context there; .astack/ is the explicit opt-in marker created by the
-// snapshot flow (which writes .astack/last-sync).
+// directory at its root. AGENTS.md alone just means routing context there.
 async function findScopes(root: string): Promise<string[]> {
   const scopes: string[] = [];
+
   async function walk(dir: string) {
     if (existsSync(join(dir, "AGENTS.md")) && existsSync(join(dir, ".astack"))) {
       scopes.push(dir);
     }
+
     let entries;
     try { entries = await readdir(dir, { withFileTypes: true }); }
     catch { return; }
+
     for (const e of entries) {
       if (!e.isDirectory()) continue;
       if (SKIP_DIRS.has(e.name)) continue;
@@ -219,17 +232,20 @@ async function findScopes(root: string): Promise<string[]> {
       await walk(join(dir, e.name));
     }
   }
+
   await walk(root);
   return scopes;
 }
 
 async function walkDocs(dir: string): Promise<string[]> {
   const out: string[] = [];
+
   async function walk(d: string) {
     if (!existsSync(d)) return;
     let entries;
     try { entries = await readdir(d, { withFileTypes: true }); }
     catch { return; }
+
     for (const e of entries) {
       const p = join(d, e.name);
       if (e.isDirectory()) {
@@ -242,15 +258,211 @@ async function walkDocs(dir: string): Promise<string[]> {
       }
     }
   }
+
   await walk(dir);
   return out;
+}
+
+async function directMarkdownFiles(scope: string, relDir: string): Promise<string[]> {
+  const dir = join(scope, relDir);
+  if (!existsSync(dir)) return [];
+
+  let entries;
+  try { entries = await readdir(dir, { withFileTypes: true }); }
+  catch { return []; }
+
+  return entries
+    .filter((e) => e.isFile() && e.name.endsWith(".md") && !SKIP_FILES.has(e.name))
+    .map((e) => join(dir, e.name));
+}
+
+async function checkDecisionFrontmatter(scope: string, tag: string): Promise<string[]> {
+  const errors: string[] = [];
+  const files = await directMarkdownFiles(scope, DECISION_DIR);
+  const example =
+    `    ---\n` +
+    `    status: accepted\n` +
+    `    implementation: partial\n` +
+    `    updated: YYYY-MM-DD\n` +
+    `    tracks: [docs/issues/active/<issue>.md]\n` +
+    `    ---`;
+
+  for (const file of files) {
+    const rel = norm(relative(scope, file));
+    const content = await readFile(file, "utf8");
+    const fm = requireFrontmatter(errors, tag, rel, content, example);
+    if (!fm) continue;
+
+    for (const key of ["status", "implementation", "updated"]) {
+      if (!scalar(fm, key)) {
+        errors.push(
+          `[${tag}] MISSING DECISION FIELD: ${rel} missing '${key}'\n` +
+          `  FIX: add '${key}:' to the architecture decision frontmatter.`,
+        );
+      }
+    }
+
+    const updated = scalar(fm, "updated");
+    if (updated && !isDateString(updated)) {
+      errors.push(
+        `[${tag}] INVALID updated DATE: ${rel} has updated: ${updated}\n` +
+        `  FIX: use YYYY-MM-DD, for example updated: 2026-05-06.`,
+      );
+    }
+
+    const implementation = scalar(fm, "implementation");
+    if (implementation && !IMPLEMENTATION_VALUES.has(implementation)) {
+      errors.push(
+        `[${tag}] INVALID implementation VALUE: ${rel} has implementation: ${implementation}\n` +
+        `  FIX: use planned, partial, or implemented.`,
+      );
+    }
+
+    if ((implementation === "planned" || implementation === "partial") && !hasValue(fm, "tracks")) {
+      errors.push(
+        `[${tag}] MISSING tracks FIELD: ${rel}\n` +
+        `  FIX: implementation '${implementation}' decisions must track open work, e.g. tracks: [docs/issues/active/<issue>.md].`,
+      );
+    }
+
+    if (implementation === "implemented" && !hasValue(fm, "evidence")) {
+      errors.push(
+        `[${tag}] MISSING evidence FIELD: ${rel}\n` +
+        `  FIX: implementation 'implemented' decisions must include evidence such as code paths, PRs, tests, or deploy receipts.`,
+      );
+    }
+
+    const status = scalar(fm, "status");
+    if (status === "superseded" && !hasValue(fm, "superseded_by")) {
+      errors.push(
+        `[${tag}] MISSING superseded_by FIELD: ${rel}\n` +
+        `  FIX: status 'superseded' decisions must point at the replacement decision.`,
+      );
+    }
+  }
+
+  return errors;
+}
+
+async function checkIssueFrontmatter(scope: string, tag: string): Promise<string[]> {
+  const errors: string[] = [];
+  const example =
+    `    ---\n` +
+    `    status: active\n` +
+    `    updated: YYYY-MM-DD\n` +
+    `    labels: [docs]\n` +
+    `    ---`;
+
+  for (const [relDir, expectedStatus] of ISSUE_DIRS.entries()) {
+    const files = await directMarkdownFiles(scope, relDir);
+    for (const file of files) {
+      const rel = norm(relative(scope, file));
+      const content = await readFile(file, "utf8");
+      const fm = requireFrontmatter(errors, tag, rel, content, example);
+      if (!fm) continue;
+
+      for (const key of ["status", "updated"]) {
+        if (!scalar(fm, key)) {
+          errors.push(
+            `[${tag}] MISSING ISSUE FIELD: ${rel} missing '${key}'\n` +
+            `  FIX: add '${key}:' to the local issue frontmatter.`,
+          );
+        }
+      }
+
+      const status = scalar(fm, "status");
+      if (status && status !== expectedStatus) {
+        errors.push(
+          `[${tag}] ISSUE STATUS/FOLDER MISMATCH: ${rel}\n` +
+          `  Folder requires status: ${expectedStatus}, but frontmatter says status: ${status}.\n` +
+          `  FIX: move the issue to docs/issues/${status}/, or change the frontmatter to status: ${expectedStatus}.`,
+        );
+      }
+
+      const updated = scalar(fm, "updated");
+      if (updated && !isDateString(updated)) {
+        errors.push(
+          `[${tag}] INVALID updated DATE: ${rel} has updated: ${updated}\n` +
+          `  FIX: use YYYY-MM-DD, for example updated: 2026-05-06.`,
+        );
+      }
+
+      if (!isNonEmptyArray(fm, "labels")) {
+        errors.push(
+          `[${tag}] MISSING labels FIELD: ${rel}\n` +
+          `  FIX: add a non-empty YAML array, e.g. labels: [docs]. Label meanings live in docs/agents/triage-labels.md.`,
+        );
+      }
+    }
+  }
+
+  return errors;
+}
+
+function stripMarkdownTarget(target: string): string | null {
+  let cleaned = target.trim().replace(/^<|>$/g, "");
+  if (!cleaned || cleaned.startsWith("#")) return null;
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(cleaned)) return null;
+
+  cleaned = cleaned.split("#")[0].split("?")[0];
+  if (!cleaned.endsWith(".md")) return null;
+  if (cleaned.includes("*") || cleaned.includes("<") || cleaned.includes(">")) return null;
+  if (cleaned.startsWith("/")) cleaned = cleaned.replace(/^\/+/, "");
+  if (cleaned.startsWith("./")) cleaned = cleaned.slice(2);
+  return cleaned;
+}
+
+function extractMarkdownReferences(content: string): string[] {
+  const refs = new Set<string>();
+
+  // Markdown links: [label](path.md) and ![label](path.md)
+  const linkRe = /!?\[[^\]]*]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/g;
+  for (const match of content.matchAll(linkRe)) {
+    const ref = stripMarkdownTarget(match[1]);
+    if (ref) refs.add(ref);
+  }
+
+  // Backticked paths: `docs/foo.md`
+  const codePathRe = /`([^`]+\.md(?:#[^`]*)?)`/g;
+  for (const match of content.matchAll(codePathRe)) {
+    const ref = stripMarkdownTarget(match[1]);
+    if (ref) refs.add(ref);
+  }
+
+  // Obsidian-style links: [[docs/foo.md]] or [[docs/foo.md#anchor|label]]
+  const wikiLinkRe = /\[\[([^\]|#]+\.md)(?:#[^\]|]*)?(?:\|[^\]]*)?]]/g;
+  for (const match of content.matchAll(wikiLinkRe)) {
+    const ref = stripMarkdownTarget(match[1]);
+    if (ref) refs.add(ref);
+  }
+
+  return [...refs];
+}
+
+async function checkContextMapReferences(scope: string, tag: string): Promise<string[]> {
+  const errors: string[] = [];
+  const file = join(scope, "CONTEXT-MAP.md");
+  if (!existsSync(file)) return errors;
+
+  const content = await readFile(file, "utf8");
+  for (const ref of extractMarkdownReferences(content)) {
+    const target = join(scope, ref);
+    if (!existsSync(target)) {
+      errors.push(
+        `[${tag}] BROKEN CONTEXT-MAP REFERENCE: ${ref}\n` +
+        `  FIX: update CONTEXT-MAP.md to point at an existing markdown file, or create the referenced doc.`,
+      );
+    }
+  }
+
+  return errors;
 }
 
 async function lintScope(scope: string, list: typeof ALLOWLIST): Promise<string[]> {
   const errors: string[] = [];
   const tag = relative(process.cwd(), scope) || ".";
 
-  // 1. Required files
+  // 1. Required files.
   for (const req of list.required) {
     if (!existsSync(join(scope, req))) {
       errors.push(
@@ -260,9 +472,26 @@ async function lintScope(scope: string, list: typeof ALLOWLIST): Promise<string[
     }
   }
 
-  // 2. docs/ contents against allowlist
+  // 2. Retired root files.
+  for (const [file, destination] of RETIRED_ROOT_FILES.entries()) {
+    if (!existsSync(join(scope, file))) continue;
+    errors.push(
+      `[${tag}] RETIRED ROOT DOC: ${file}\n` +
+      `  FIX: move this content to ${destination}.`,
+    );
+  }
+
+  // 3. docs/ contents against allowlist.
   const docsDir = join(scope, "docs");
   if (existsSync(docsDir)) {
+    for (const dir of RETIRED_PRIMARY_DOC_DIRS) {
+      if (!existsSync(join(scope, dir))) continue;
+      errors.push(
+        `[${tag}] RETIRED PRIMARY DOC FOLDER: ${dir}/\n` +
+        `  FIX: migrate active knowledge into the v2 contract, or quarantine old material under docs/_legacy/${dir.slice("docs/".length)}/.`,
+      );
+    }
+
     const patterns = [...list.required, ...list.allowed]
       .filter((p) => p.startsWith("docs/"))
       .map(globToRegex);
@@ -272,97 +501,35 @@ async function lintScope(scope: string, list: typeof ALLOWLIST): Promise<string[
       if (!patterns.some((re) => re.test(rel))) {
         errors.push(
           `[${tag}] NOT ON ALLOWLIST: ${rel}\n` +
-          `  FIX: move to an allowed folder, quarantine under docs/_legacy/, or delete.`,
+          `  FIX: move to the v2 knowledge contract, quarantine under docs/_legacy/, or delete.`,
         );
       }
     }
   }
 
-  // 3. AGENTS.md size
+  // 4. AGENTS.md size.
   const agents = join(scope, "AGENTS.md");
   if (existsSync(agents)) {
     const lines = (await readFile(agents, "utf8")).split("\n").length;
     if (lines > MAX_AGENTS_LINES) {
       errors.push(
         `[${tag}] AGENTS.md too long: ${lines} lines (max ${MAX_AGENTS_LINES})\n` +
-        `  FIX: AGENTS.md is a map, not a manual. Move content into docs/ and link.`,
+        `  FIX: AGENTS.md is a map, not a manual. Move content into the v2 knowledge tree and link.`,
       );
     }
   }
 
-  // 4. Frontmatter on design-docs, exec-plans, product-specs
-  const validFolders = await readFoldersConfig(scope);
-  for (const sub of FRONTMATTER_DIRS) {
-    const dir = join(scope, sub);
-    if (!existsSync(dir)) continue;
-    let entries;
-    try { entries = await readdir(dir, { withFileTypes: true }); }
-    catch { continue; }
-    const foldersRequiredHere = FOLDERS_REQUIRED_DIRS.includes(sub);
-    for (const e of entries) {
-      if (!e.isFile()) continue;
-      if (!e.name.endsWith(".md")) continue;
-      if (e.name === "index.md") continue;
-      if (e.name === "tech-debt-tracker.md") continue;
-      const f = join(dir, e.name);
-      const rel = norm(relative(scope, f));
-      const content = await readFile(f, "utf8");
-      const fm = parseFrontmatter(content);
-      if (!fm) {
-        errors.push(
-          `[${tag}] MISSING FRONTMATTER: ${rel}\n` +
-          `  FIX: add a YAML block at the top:\n` +
-          `    ---\n    status: draft\n    updated: YYYY-MM-DD\n    folders: [<folder-or-all>]\n    ---`,
-        );
-        continue;
-      }
-      // Status-folder invariant for design-docs subfolders. When a doc lives
-      // in design-docs/<status>/, its frontmatter status must equal the
-      // folder name (both are sources of truth — must agree).
-      const designDocsPrefix = "docs/design-docs/";
-      if (sub.startsWith(designDocsPrefix)) {
-        const folderStatus = sub.slice(designDocsPrefix.length);
-        if (DESIGN_DOC_STATUS_FOLDERS.has(folderStatus)) {
-          const declared = typeof fm.status === "string" ? fm.status : undefined;
-          if (declared !== folderStatus) {
-            errors.push(
-              `[${tag}] STATUS/FOLDER MISMATCH: ${rel}\n` +
-              `  Folder is '${folderStatus}/' but frontmatter says status: ${declared ?? "(missing)"}.\n` +
-              `  FIX: move the file to docs/design-docs/${declared ?? "<status>"}/, or change the frontmatter to 'status: ${folderStatus}'.`,
-            );
-          }
-        }
-      }
-      if (!foldersRequiredHere) continue;
-      const folders = fm["folders"];
-      if (!folders || (Array.isArray(folders) && folders.length === 0)) {
-        errors.push(
-          `[${tag}] MISSING folders FIELD: ${rel}\n` +
-          `  FIX: add a 'folders:' YAML array in the frontmatter, e.g. 'folders: [service]' or 'folders: [all]'.`,
-        );
-        continue;
-      }
-      if (validFolders && validFolders.size > 0) {
-        const list = Array.isArray(folders) ? folders : [folders];
-        const bad = list.filter((v) => v !== "all" && !validFolders.has(v));
-        if (bad.length > 0) {
-          errors.push(
-            `[${tag}] INVALID folders VALUE: ${rel} has ${JSON.stringify(bad)}\n` +
-            `  FIX: use one of ${[...validFolders, "all"].map((v) => `'${v}'`).join(", ")}. Configured in .astack/folders.txt.`,
-          );
-        }
-      }
-    }
-  }
+  // 5. V2 frontmatter and reference checks.
+  errors.push(...await checkDecisionFrontmatter(scope, tag));
+  errors.push(...await checkIssueFrontmatter(scope, tag));
+  errors.push(...await checkContextMapReferences(scope, tag));
 
   return errors;
 }
 
 // Walk descendants of a scope looking for un-opted-in subdirectories that
 // have grown their own doc tree or structural markdown. Opted-in descendants
-// are skipped (they're linted as their own scope). Un-opted descendants
-// should inherit from the parent scope — no parallel docs/, no structural
-// root files.
+// are skipped because they are linted as their own scope.
 async function checkDescendantDrift(scope: string): Promise<string[]> {
   const errors: string[] = [];
   const tag = relative(process.cwd(), scope) || ".";
@@ -371,6 +538,7 @@ async function checkDescendantDrift(scope: string): Promise<string[]> {
     let entries;
     try { entries = await readdir(dir, { withFileTypes: true }); }
     catch { return; }
+
     for (const e of entries) {
       if (!e.isDirectory()) continue;
       if (SKIP_DIRS.has(e.name)) continue;
@@ -380,7 +548,7 @@ async function checkDescendantDrift(scope: string): Promise<string[]> {
       const hasAgents = existsSync(join(p, "AGENTS.md"));
       const hasAstack = existsSync(join(p, ".astack"));
 
-      // Opted-in descendant: it's its own scope. Don't recurse; don't flag.
+      // Opted-in descendant: it is its own scope. Do not recurse or flag.
       if (hasAgents && hasAstack) continue;
 
       // Un-opted descendant with AGENTS.md: check for drift signals.
@@ -390,26 +558,26 @@ async function checkDescendantDrift(scope: string): Promise<string[]> {
         if (existsSync(join(p, "docs"))) {
           errors.push(
             `[${tag}] UNEXPECTED DOCS TREE: ${rel}/docs/\n` +
-            `  ${rel}/ has AGENTS.md but no .astack/ — it is not an opted-in scope.\n` +
-            `  FIX: move content to the scope's root docs/ tree, or opt in ${rel}/ as its own scope by running astack-docs snapshot mode there.`,
+            `  ${rel}/ has AGENTS.md but no .astack/; it is not an opted-in scope.\n` +
+            `  FIX: move content to the parent scope's v2 knowledge tree, or opt in ${rel}/ as its own scope by running astack-docs snapshot mode there.`,
           );
         }
 
         let subEntries;
         try { subEntries = await readdir(p, { withFileTypes: true }); }
         catch { subEntries = []; }
+
         for (const se of subEntries) {
           if (!se.isFile()) continue;
-          if (!RESERVED_STRUCTURAL_FILES.has(se.name)) continue;
+          if (!RESERVED_DESCENDANT_FILES.has(se.name)) continue;
           errors.push(
             `[${tag}] UNEXPECTED STRUCTURAL FILE: ${rel}/${se.name}\n` +
-            `  ${se.name} is reserved for opted-in scopes' docs/ trees.\n` +
-            `  FIX: move content to the scope's root docs/${se.name}, or opt in ${rel}/ as its own scope.`,
+            `  ${se.name} belongs to an opted-in astack-docs scope root.\n` +
+            `  FIX: move content to the parent scope's v2 knowledge tree, or opt in ${rel}/ as its own scope.`,
           );
         }
       }
 
-      // Recurse into descendants that are not themselves scopes.
       await walk(p);
     }
   }
@@ -419,24 +587,28 @@ async function checkDescendantDrift(scope: string): Promise<string[]> {
 }
 
 // Gently inspect SKILL.md frontmatter under <scope>/skills/*/SKILL.md (if
-// that tree exists). Info-only — never contributes to the error count.
-// Flags skills missing source_docs / verified_at when ASTACK_SKILLS_INFO=1.
+// that tree exists). Info-only; never contributes to the error count.
 async function checkSkillFrontmatter(scope: string): Promise<string[]> {
   const notes: string[] = [];
   if (!SKILLS_INFO) return notes;
+
   const skillsDir = join(scope, "skills");
   if (!existsSync(skillsDir)) return notes;
+
   let entries;
   try { entries = await readdir(skillsDir, { withFileTypes: true }); }
   catch { return notes; }
+
   const tag = relative(process.cwd(), scope) || ".";
   for (const e of entries) {
     if (!e.isDirectory()) continue;
     const file = join(skillsDir, e.name, "SKILL.md");
     if (!existsSync(file)) continue;
+
     const content = await readFile(file, "utf8");
     const fm = parseFrontmatter(content);
     if (!fm) continue;
+
     const missing: string[] = [];
     if (!fm["source_docs"]) missing.push("source_docs");
     if (!fm["verified_at"]) missing.push("verified_at");
@@ -445,12 +617,14 @@ async function checkSkillFrontmatter(scope: string): Promise<string[]> {
         `[${tag}] INFO skills/${e.name}/SKILL.md missing ${missing.join(", ")} (materialized-view fields).`,
       );
     }
+
     for (const key of Object.keys(fm)) {
       if (!SKILL_FRONTMATTER_KEYS.has(key)) {
         notes.push(`[${tag}] INFO skills/${e.name}/SKILL.md has unknown frontmatter key '${key}'.`);
       }
     }
   }
+
   return notes;
 }
 
